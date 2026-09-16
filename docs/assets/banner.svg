@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" width="1200" height="600" role="img" aria-label="perdure. Start, work, review, close; then, in a new session or a new agent, resume with any model.">
+  <defs>
+    <style>
+      .sans{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+      .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
+    </style>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#111"/></marker>
+  </defs>
+  <rect width="1200" height="600" fill="#FFFFFF"/>
+  <text class="sans" x="600" y="300" font-size="280" font-weight="700" fill="#111" letter-spacing="-12" text-anchor="middle">perdure</text>
+  <g class="sans" font-size="28" font-weight="700" text-anchor="middle">
+    <rect x="49" y="430" width="160" height="74" rx="37.0" fill="#4285F4"/><text x="129" y="477" fill="#fff">START</text><rect x="249" y="430" width="150" height="74" rx="37.0" fill="#EA4335"/><text x="324" y="477" fill="#fff">WORK</text><rect x="439" y="430" width="186" height="74" rx="37.0" fill="#FBBC05"/><text x="532" y="477" fill="#111">REVIEW</text><rect x="665" y="430" width="160" height="74" rx="37.0" fill="#34A853"/><text x="745" y="477" fill="#fff">CLOSE</text><rect x="959" y="430" width="176" height="74" rx="37.0" fill="#4285F4"/><text x="1047" y="477" fill="#fff">RESUME</text>
+  </g>
+  <g stroke="#111" stroke-width="3" fill="none">
+    <line x1="217" y1="467.0" x2="241" y2="467.0" marker-end="url(#a)"/><line x1="407" y1="467.0" x2="431" y2="467.0" marker-end="url(#a)"/><line x1="633" y1="467.0" x2="657" y2="467.0" marker-end="url(#a)"/>
+    <line x1="833" y1="467.0" x2="951" y2="467.0" stroke-dasharray="8 9" marker-end="url(#a)"/>
+  </g>
+  <text class="mono" x="892" y="414" font-size="15" fill="#5F6368" text-anchor="middle">new session · new agent</text>
+  <text class="sans" x="1047" y="540" font-size="22" font-weight="700" fill="#4285F4" text-anchor="middle">any model</text>
+</svg>

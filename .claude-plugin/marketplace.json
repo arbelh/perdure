@@ -1,0 +1,29 @@
+{
+  "name": "perdure",
+  "owner": {
+    "name": "Arbel Hakopian"
+  },
+  "metadata": {
+    "description": "perdure \u2014 committed records your agents can trust."
+  },
+  "plugins": [
+    {
+      "name": "perdure",
+      "source": "./",
+      "description": "Checked memory skills for AI coding agents. Resume anywhere: any task, any session, any model, from a checkout. One markdown record per task, committed like code and checked like code, with a lint, a review gate, decision records, a generated HANDOFF page, and session archives.",
+      "license": "MIT",
+      "keywords": [
+        "records",
+        "memory",
+        "handoff",
+        "workflow-state",
+        "adr",
+        "decision-records",
+        "archive",
+        "code-review",
+        "long-running-work"
+      ],
+      "version": "4.0.0"
+    }
+  ]
+}

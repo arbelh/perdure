@@ -1,0 +1,29 @@
+{
+  "name": "perdure",
+  "version": "4.0.0",
+  "description": "Checked memory skills for AI coding agents. Resume anywhere: any task, any session, any model, from a checkout. One markdown record per task, committed like code and checked like code, with a lint, a review gate, decision records, a generated HANDOFF page, and session archives.",
+  "author": {
+    "name": "Arbel Hakopian",
+    "url": "https://github.com/arbelh"
+  },
+  "homepage": "https://github.com/arbelh/perdure",
+  "repository": "https://github.com/arbelh/perdure",
+  "license": "MIT",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "perdure",
+    "shortDescription": "Committed records your agents can trust: start, work, verdict, close — resume with any model.",
+    "longDescription": "perdure keeps one markdown record per task in your repository — what was decided, what was set aside, what is still open — and checks it with a deterministic lint, a review gate and a generated HANDOFF page. Fourteen skills cover the lifecycle; the checks run with Python 3 from any checkout.",
+    "developerName": "Arbel Hakopian",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Read perdure/HANDOFF.md and tell me where this project stands",
+      "Start a perdure record for this task and keep it updated as we work"
+    ]
+  }
+}

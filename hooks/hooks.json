@@ -1,0 +1,27 @@
+{
+  "description": "perdure plugin hooks. PreCompact auto-archives the session before /compact, gated by ~/.claude/perdure-preferences.json (auto-archive-before-compact, default off). PostToolUse runs the record-rot lint when an Edit/Write lands on a perdure/workflows/*.md record whose status is terminal or near-terminal (closed/done/finished earn a vocabulary correction), regenerates a stale generator-stamped perdure/HANDOFF.md host-side after such an edit (never creates one, never overwrites a hand-written page; opt-out via handoff-regen-at-close, default on), and warns on direct edits to that derived page — advisory, silent when clean, opt-out via rot-lint-at-close (default on).",
+  "hooks": {
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-compact-archive.py\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/rot-lint-gate.py\"",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  }
+}

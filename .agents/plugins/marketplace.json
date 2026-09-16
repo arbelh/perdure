@@ -1,0 +1,22 @@
+{
+  "name": "perdure",
+  "interface": {
+    "displayName": "perdure"
+  },
+  "plugins": [
+    {
+      "name": "perdure",
+      "version": "4.0.0",
+      "description": "Checked memory skills for AI coding agents. Resume anywhere: any task, any session, any model, from a checkout. One markdown record per task, committed like code and checked like code, with a lint, a review gate, decision records, a generated HANDOFF page, and session archives.",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420">
+<rect width="1200" height="420" fill="#ffffff"/>
+<text x="600.0" y="52" text-anchor="middle" font-family="Inter, Helvetica, Arial, sans-serif" font-size="26" font-weight="700" fill="#111111">The record travels with the code.</text>
+<text x="600.0" y="86" text-anchor="middle" font-family="Inter, Helvetica, Arial, sans-serif" font-size="20" fill="#444">The next session starts where the last one stopped.</text>
+<text x="40" y="130" font-family="Inter, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#4285F4" letter-spacing="3">WITH PERDURE</text>
+<rect x="40" y="148.0" width="250" height="64" rx="32" fill="#4285F4"/><text x="165.0" y="189" text-anchor="middle" font-family="Inter, Helvetica, Arial, sans-serif" font-size="26" font-weight="700" fill="#fff">WORK + RECORD</text>
+<line x1="290" y1="180" x2="336" y2="180" stroke="#111111" stroke-width="4"/><polygon points="334,171 350,180 334,189" fill="#111111"/>
+<rect x="350" y="148.0" width="250" height="64" rx="32" fill="#fff" stroke="#777777" stroke-width="3" stroke-dasharray="10 8"/><text x="475.0" y="189" text-anchor="middle" font-family="Inter, Helvetica, Arial, sans-serif" font-size="26" font-weight="700" fill="#111111">SESSION ENDS</text>
+<line x1="600" y1="180" x2="646" y2="180" stroke="#111111" stroke-width="4" stroke-dasharray="9 7"/><polygon points="644,171 660,180 644,189" fill="#111111"/>
+<rect x="660" y="148.0" width="250" height="64" rx="32" fill="#34A853"/><text x="785.0" y="189" text-anchor="middle" font-family="Inter, Helvetica, Arial, sans-serif" font-size="26" font-weight="700" fill="#fff">CONTINUE</text>
+<text x="944" y="189" font-family="Inter, Helvetica, Arial, sans-serif" font-size="26" font-weight="700" fill="#34A853">✔</text><text x="982" y="189" font-family="Inter, Helvetica, Arial, sans-serif" font-size="24" fill="#34A853">any model</text>
+<text x="40" y="275" font-family="Inter, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#777777" letter-spacing="3">WITHOUT PERDURE</text>
+<rect x="40" y="293.0" width="250" height="64" rx="32" fill="#4285F4"/><text x="165.0" y="334" text-anchor="middle" font-family="Inter, Helvetica, Arial, sans-serif" font-size="26" font-weight="700" fill="#fff">WORK</text>
+<line x1="290" y1="325" x2="336" y2="325" stroke="#111111" stroke-width="4"/><polygon points="334,316 350,325 334,334" fill="#111111"/>
+<rect x="350" y="293.0" width="250" height="64" rx="32" fill="#fff" stroke="#777777" stroke-width="3" stroke-dasharray="10 8"/><text x="475.0" y="334" text-anchor="middle" font-family="Inter, Helvetica, Arial, sans-serif" font-size="26" font-weight="700" fill="#111111">SESSION ENDS</text>
+<line x1="600" y1="325" x2="646" y2="325" stroke="#111111" stroke-width="4" stroke-dasharray="9 7"/><polygon points="644,316 660,325 644,334" fill="#111111"/>
+<rect x="660" y="293.0" width="250" height="64" rx="32" fill="#EA4335"/><text x="785.0" y="334" text-anchor="middle" font-family="Inter, Helvetica, Arial, sans-serif" font-size="26" font-weight="700" fill="#fff">CONTEXT GONE</text>
+<text x="944" y="334" font-family="Inter, Helvetica, Arial, sans-serif" font-size="26" font-weight="700" fill="#EA4335">✗</text><text x="982" y="334" font-family="Inter, Helvetica, Arial, sans-serif" font-size="24" fill="#EA4335">re-explain</text>
+</svg>
