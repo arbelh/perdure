@@ -14,12 +14,14 @@ hooks, one convention. Changes that keep it small are the easiest to land.
   is merged only after it passes there; a change in behaviour is merged with a
   case that fails without it.
 - **One version everywhere.** `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`,
-  `.agents/plugins/marketplace.json` and the README badge carry the same version.
+  `.agents/plugins/marketplace.json` carry the same version.
 
 ## Shape of a change
 
-- **A skill** is one folder with one `SKILL.md`, a stub in `.claude/commands/`,
-  and a name that is not a Claude Code built-in. A skill that runs a script names
+- **A skill** is one folder with one `SKILL.md` and a name that is not a Claude
+  Code built-in; it registers `/perdure:<name>` by itself, and the plugin ships no
+  command files, since a command under a skill's name would shadow the skill for
+  the model. A skill that runs a script names
   the plugin-root path first and carries a `scripts` link beside it
   (`ln -s ../../scripts skills/<name>/scripts`), so the skills CLI ships the
   checks with the skill.

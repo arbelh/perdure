@@ -1,13 +1,12 @@
 {
   "name": "perdure",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "Checked memory skills for AI coding agents. Resume anywhere: any task, any session, any model, from a checkout. One markdown record per task, committed like code and checked like code, with a lint, a review gate, decision records, a generated HANDOFF page, and session archives.",
   "author": {
     "name": "Arbel Hakopian"
   },
   "repository": "https://github.com/arbelh/perdure",
   "license": "MIT",
-  "commands": "./.claude/commands",
   "keywords": [
     "records",
     "memory",

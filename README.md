@@ -283,7 +283,6 @@ is in [docs/THREE-LAYERS.md](docs/THREE-LAYERS.md).
 .claude-plugin/    plugin.json · marketplace.json   — Claude Code
 .codex-plugin/     plugin.json                      — Codex CLI
 .agents/plugins/   marketplace.json                 — Codex CLI
-.claude/commands/  the fourteen slash commands
 skills/            the fourteen skills — what any agent reads
 scripts/           rot-lint · handoff · close-workflow · new-workflow · coverage · raw-index · export-session
 hooks/             close gate · pre-compact archive
