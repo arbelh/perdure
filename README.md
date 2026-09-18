@@ -81,6 +81,8 @@ into `~/.claude/CLAUDE.md`, so the model opens a record when a task begins and
 closes it when the work is done, without being asked, and it asks a few
 preference questions. Skip it and you drive with `/perdure:start`.
 `/perdure:health` checks the setup; `/perdure:uninstall` reverses everything.
+Later, `claude plugin marketplace update perdure` then
+`claude plugin update perdure@perdure` moves you to the newest release.
 
 </details>
 
