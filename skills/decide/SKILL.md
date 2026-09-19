@@ -16,18 +16,23 @@ workflows, sessions, and time.
 
 ## When to use this skill
 
-Create an ADR for decisions that:
-- Affect architecture, data model, or system boundaries
-- Have trade-offs worth documenting (chose X over Y because Z)
-- Future engineers (or you in 6 months) will ask "why did we do this?"
-- Cross multiple workflows or live beyond a single feature
+Create an ADR when a task that never reads the originating record must still
+obey the decision — a default, a name, a boundary, a rule — and it can be
+stated in one sentence without that task's filenames. Size does not matter: a
+one-line default other tasks inherit qualifies; a ten-file refactor's local
+choices do not. Typical shapes:
+- Architecture, data model, or system boundaries
+- Trade-offs worth documenting (chose X over Y because Z)
+- Anything future engineers (or you in 6 months) will ask "why?" about
+- Anything that crosses workflows or outlives a single feature
 
-**Don't create an ADR for**:
-- Trivial implementation details (indentation, variable names)
-- Single-file bug fixes
-- Anything reversible with a one-line change
+**Don't create an ADR for** a choice only this task's files depend on, however
+large the change. When only the rule matters and not the why, propose a
+one-line addition to the project's instruction file (`CLAUDE.md` or
+`AGENTS.md`) instead, for the user to place — perdure never writes outside
+`perdure/`.
 
-If unsure, ask the user: "Is this an architectural decision or an implementation detail?"
+If unsure, ask the user: "Will another task have to obey this without reading the record?"
 
 ## Steps
 

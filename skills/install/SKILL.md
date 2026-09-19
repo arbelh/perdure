@@ -52,9 +52,12 @@ Complex, multi-step, or multi-session work keeps one record per task under
 perdure/workflows/ (convention: the perdure plugin's docs/RECORDS-CONVENTION.md).
 
 - Open with /perdure:start <slug>; update at checkpoints, not every turn.
-- Close with /perdure:close — never declare a workflow done with an
-  empty # Review section (append a verdict or record the conscious skip), and
-  treat rot-lint findings before a record goes terminal.
+- Close with /perdure:close, which runs scripts/close-workflow.py. Never set
+  completed or abandoned by editing the record: the closer sets the canonical
+  status, stamps it, records the outcome or the conscious skip
+  (--skip-review "<reason>"), and creates or refreshes perdure/HANDOFF.md.
+  Never declare a workflow done with an empty # Review section, and treat
+  rot-lint findings before a record goes terminal.
 - Status vocabulary: in-progress (alias: active) | parked | completed |
   abandoned. Avoid "closed", "done", and "finished": they DO trip the close
   gate (the lint and the review gate run), but they sit outside the
@@ -79,12 +82,16 @@ deterministic scaffolder (refuses to overwrite):
 `python3 "$PERDURE/new-workflow.py" <slug> --goal "<goal>"`
 or Write the file per the plugin's docs/RECORDS-CONVENTION.md. Pass the file
 path into the dispatch prompt. Close autonomously the same way — the
-deterministic closer refuses on an empty # Review, lints, sets the canonical
-status, and regenerates the HANDOFF page when one exists:
-`python3 "$PERDURE/close-workflow.py" <slug> [--outcome "<text>"]`
+deterministic closer refuses on an empty # Review (or records a conscious skip
+with --skip-review), lints, sets the canonical status, and creates or
+regenerates the HANDOFF page:
+`python3 "$PERDURE/close-workflow.py" <slug> [--outcome "<text>"] [--skip-review "<reason>"]`
 Note: a sandboxed `claude -p` child usually cannot read ~/.claude/plugins at
-all. Inside one, write records by hand per docs/RECORDS-CONVENTION.md — the
-close-gate hook runs host-side and still lints and refreshes the HANDOFF.
+all. Inside one, write the record by hand per docs/RECORDS-CONVENTION.md and
+leave it in-progress when you can; if it must go terminal there, say so in
+# Outcome — that is the one hand-close the convention allows. The close-gate
+hook runs host-side, names the hand-close and lints; the host then runs the
+closer, which verifies the record and creates or refreshes the HANDOFF.
 <!-- perdure-records:end -->
 ```
 
@@ -119,7 +126,8 @@ where available):
    projects) / `never` (TodoWrite only) / `ask` each time.
 2. **Decision promotion** — at workflow close, how do decisions become ADRs?
    `none` (ask each time, default) / `tagged` (`{promote}` marks only —
-   deterministic, automation-friendly) / `heuristic` (auto-score) / `all` (noisy).
+   deterministic, automation-friendly) / `heuristic` (the inheritance test: promote
+   what a task that never reads this record must still obey) / `all` (noisy).
 3. **Auto-archive before /compact** — preserve the full transcript as portable
    markdown in `perdure/archives/` before every compaction? `true` (recommended;
    ~1 MB/session) / `false` (archive manually via /perdure:archive).

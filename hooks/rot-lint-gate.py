@@ -211,6 +211,76 @@ def status_terminal_kind(path: Path, sv):
     return None, ""
 
 
+
+def _status_value(text):
+    """The value of a frontmatter-shaped `status:` line in a text fragment, or None.
+
+    Scoped to the frontmatter: only lines before the fragment's first closing
+    fence (`---`), first heading, or first code fence count, so a `status:` example
+    quoted in the body or inside ``` never registers (review 2026-09-18).
+    """
+    if not isinstance(text, str):
+        return None
+    lines = text.splitlines()
+    # a whole file starts with the opening fence; a fragment starts inside it
+    start = 1 if lines and lines[0].strip() == "---" else 0
+    for line in lines[start:]:
+        st = line.strip()
+        if st == "---" or st.startswith("#") or st.startswith("```"):
+            break
+        m = re.match(r"^[ \t]*status:[ \t]*(\S.*)$", line)
+        if m:
+            return m.group(1).strip()
+        if st and not re.match(r"^[A-Za-z0-9_-]+:", st):
+            break  # a prose line: the fragment has left the frontmatter (review 2026-09-18)
+    return None
+
+
+def hand_close_note(event: dict, record: Path, sv) -> str:
+    """Name a close that happened by editing the file rather than through the closer.
+
+    close-workflow.py writes from Python, never through a model tool call, so an
+    Edit whose new text sets a terminal status where the old text had none, or a
+    Write of a whole terminal record, is a hand-close by construction. Measured
+    2026-09-17: 3 of 5 closes in headless runs were such edits; the closer's
+    stamp, outcome line and first-page creation were skipped each time. Advisory:
+    the note sends the model to the closer, which verifies an already-terminal
+    record and creates or refreshes the page. Empty string when not a hand-close.
+    """
+    ti = event.get("tool_input")
+    if not isinstance(ti, dict):
+        return ""
+    def term(v):
+        # canonical terminal only: a near-terminal alias (closed/done/finished) is
+        # the vocabulary note's case, which already points to the closer, and the
+        # closer runs a full close on it rather than a verification
+        return v is not None and sv.is_terminal(v)
+    tool = event.get("tool_name") or ""
+    if tool == "Edit":
+        if not (term(_status_value(ti.get("new_string"))) and not term(_status_value(ti.get("old_string")))):
+            return ""
+        how = "an Edit of the frontmatter"
+    elif tool == "Write":
+        if not term(_status_value(ti.get("content"))):
+            return ""
+        how = "a Write of the whole file carrying a terminal status (a rewrite of a record the closer already closed looks the same; if so, ignore this)"
+    else:
+        return ""
+    stem = record.stem
+    slug = stem[11:] if re.match(r"\d{4}-\d{2}-\d{2}-", stem) else stem
+    scrub = lambda t: t.replace("PERDURE-LINT-OUTPUT", "PERDURE-LINT-0UTPUT")[:60]
+    name, slug = scrub(record.name), scrub(slug)
+    return (
+        f"Hand-close: {name} went terminal through {how}, not through the "
+        f"closer. `close-workflow.py` writes from Python, so this close skipped it: the "
+        f"canonical status and `updated:` stamp, the recorded skip or Outcome line, and "
+        f"creating the HANDOFF page when the project has none. Run "
+        f"`python3 \"${{CLAUDE_PLUGIN_ROOT}}/scripts/close-workflow.py\" {slug}` now: on an "
+        f"already-terminal record it verifies (lint, # Review present) and creates or "
+        f"refreshes the page. Next time run it instead of editing the status; "
+        f"`--skip-review \"<reason>\"` records a conscious skip when there is no reviewer."
+    )
+
 def is_handoff_page(event: dict) -> bool:
     """True iff the edited file is a perdure/HANDOFF.md derived page."""
     tool_input = event.get("tool_input")
@@ -406,14 +476,16 @@ def _run() -> int:
             f"Status vocabulary: this record says `status: "
             f"{token[:40].replace('PERDURE-LINT-OUTPUT', 'PERDURE-LINT-0UTPUT')}`, which is "
             f"OUTSIDE the convention's vocabulary (in-progress | parked | completed "
-            f"| abandoned) — the close has not fully registered. Set a canonical "
-            f"terminal status; `scripts/close-workflow.py <slug>` does the whole "
-            f"close deterministically (review-gate check, lint, status, HANDOFF)."
+            f"| abandoned) — the close has not fully registered. Run "
+            f"`python3 \"${{CLAUDE_PLUGIN_ROOT}}/scripts/close-workflow.py\" <slug>`: it sets the canonical terminal status "
+            f"and does the whole close deterministically (review-gate check, lint, "
+            f"stamp, HANDOFF). Do not edit the status by hand."
         )
     # regenerate the derived page AFTER the lint verdict is known: a flagged
     # record is withheld by the generator, so regeneration is correct state
     # either way (the page must reflect the records as they are now)
     regen_note = regenerate_handoff(record)
+    hand_note = hand_close_note(event, record, sv)
 
     parts = []
     cut_tail = False
@@ -450,6 +522,8 @@ def _run() -> int:
         )
     if vocab_note:
         parts.append(vocab_note)
+    if hand_note:
+        parts.append(hand_note)
     if has_rot:
         parts.append(SCOPE_NOTE_CUT if cut_tail else SCOPE_NOTE)
         # rot-lint writes nothing to stderr on a normal run; anything there is

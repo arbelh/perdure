@@ -53,6 +53,9 @@ Present to the user and load into context:
 
 ### Key decisions made
 <decisions section summary>
+(Each holds as written. A later record that changed one names this record on
+its line; if another record disagrees and neither names the other, hold both
+as unresolved rather than picking by tone.)
 
 ### Files modified so far
 <files modified section>

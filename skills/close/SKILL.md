@@ -1,10 +1,11 @@
 ---
 name: close
 description: Close a workflow record properly — rot-lint it, verify the review
-  gate, set the terminal status, fill the Outcome, run the ADR promotion pass,
-  and regenerate the HANDOFF page. Use when work on a workflow is finished (or
+  gate, run the promotion pass, name any earlier decision this record changes,
+  then run the closer, which sets the terminal status and creates or regenerates
+  the HANDOFF page. Use when work on a workflow is finished (or
   abandoned) and its record should go terminal without lying.
-argument-hint: "[workflow-slug] [--abandon <reason>]"
+argument-hint: "[workflow-slug] [--abandon <reason>] [--skip-review <reason>]"
 ---
 
 # Close a Workflow Record
@@ -12,24 +13,18 @@ argument-hint: "[workflow-slug] [--abandon <reason>]"
 Resolve the record: `$1` as a slug → `perdure/workflows/<date>-<slug>.md`;
 no argument → the sole `in-progress` workflow, else ask.
 
-**Deterministic path (preferred — and the ONLY path in headless flows):** after
-you have made sure `# Review` carries its verdict (step 2) and `# Outcome` its
-prose (step 4), run
+**The closer sets the status, in every mode.** Steps 1 to 5 prepare the record;
+step 6 runs `close-workflow.py`, which flips the status. Never set `completed`
+or `abandoned` by editing the frontmatter: a hand-set status skips the
+canonical status and `updated:` stamp, the recorded skip or Outcome line, and
+the page a project gets at its first close. Measured 2026-09-17: three of five
+headless closes were hand edits, and each left those behind. The close-gate
+hook names a hand-close when it sees one and sends you here.
 
 (`${CLAUDE_PLUGIN_ROOT}` is the plugin directory, set by Claude Code. Without
 it, the same scripts sit in the plugin checkout's root `scripts/` directory (a
 Codex install keeps the whole checkout), in `scripts/` beside this SKILL.md (a
 skills-CLI install), or in your clone of `github.com/arbelh/perdure`.)
-
-```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/close-workflow.py" <slug> [--abandon "<reason>"]
-```
-
-It performs steps 1, 3, and 6 mechanically — refuses on an empty `# Review`
-(exit 4), refuses on lint findings (exit 3; `--force-lint` overrides, record
-why), sets the canonical terminal status, bumps `updated:`, and regenerates the
-HANDOFF page when one exists. Then finish with steps 5 and 7. The manual order below is the same
-contract, spelled out:
 
 ### 1. Rot lint first
 
@@ -47,48 +42,70 @@ surviving negatives. A record must not go terminal while its status lies.
 
 The `# Review` section must carry a verdict block (schema in
 `docs/RECORDS-CONVENTION.md`, also at `references/RECORDS-CONVENTION.md`
-beside this SKILL.md in a skills-CLI install) or an explicitly recorded skip with a reason.
-Empty `# Review` on a completed workflow is a convention violation — offer
-`/perdure:verdict <slug>` before closing, or record the conscious skip.
+beside this SKILL.md in a skills-CLI install) or an explicitly recorded skip
+with a reason. Offer `/perdure:verdict <slug>` before closing. With no reviewer
+available, the closer's `--skip-review "<reason>"` writes the convention's
+recorded skip and closes on it; the skip becomes part of the record.
 
-### 3. Set the terminal status
+### 3. Decisions that change an earlier record
 
-Frontmatter `status: completed` (or `abandoned`, appending the reason to the
-record), and refresh `updated:`. The close-gate hook will re-lint automatically
-on any later edit to this record — treat anything it injects.
+For each line under `# Decisions`: does it change a decision recorded in an
+earlier record? If so, name that record's date-slug on the line and say why
+(`changes 2026-05-12-cache-warmup: TTL 300 → 60, because …`). If the earlier
+decision is an ADR, supersede it with `/perdure:decide` instead. Two records
+that disagree and name neither are unresolved for every later reader; naming
+is what makes the change as loud as the original.
 
-### 4. Fill `# Outcome`
+### 4. Promotion pass
 
-One short paragraph: what shipped/changed, where it landed (commits, tags,
+Promote a decision when a task that never reads this record must still obey
+it — a default, a name, a boundary, a rule — and it can be stated in one
+sentence without this task's filenames. Size does not matter: a one-line
+default other tasks inherit qualifies; a ten-file refactor's local choices do
+not. Apply the `auto-promote-decisions` preference (`none` lists and asks,
+`tagged` takes `{promote}` marks, `heuristic` applies this test, `all`
+promotes everything). Two homes: an ADR via `/perdure:decide <slug>` when the
+why and the alternatives matter, marking the decision `[promoted → #NNN]`; or,
+when only the rule matters, propose a one-line addition to the project's
+instruction file (`CLAUDE.md` or `AGENTS.md`) for the user to place — perdure
+never writes outside `perdure/`.
+
+### 5. Fill `# Outcome`
+
+One short paragraph: what shipped or changed, where it landed (commits, tags,
 deploys), and a one-line cost estimate when known
-(`Cost: ~$X, ~N dispatches (estimate)`).
+(`Cost: ~$X, ~N dispatches (estimate)`). The closer can append it for you
+with `--outcome "<text>"`.
 
-### 5. ADR promotion pass
-
-Apply the `auto-promote-decisions` preference (modes and the scoring heuristic
-are defined in the convention's *Operating the record* section). To promote:
-`/perdure:decide <slug>`, then mark the workflow decision `[promoted → #NNN]`.
-
-### 6. Regenerate the HANDOFF page
+### 6. Run the closer
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff.py" .
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/close-workflow.py" <slug> [--abandon "<reason>"] [--skip-review "<reason>"] [--outcome "<text>"]
 ```
 
-Never hand-edit the page. If `perdure/HANDOFF.md` does not exist yet, this
-first close creates it: the page is derived from the records and can be
-regenerated at any time. Projects that do not want the page set
-`handoff-regen-at-close: false` in `~/.claude/perdure-preferences.json`.
+It refuses on an empty `# Review` (exit 4) unless `--skip-review` records the
+skip, refuses on lint findings (exit 3; `--force-lint` overrides, record why),
+sets the canonical terminal status, stamps `updated:`, appends the abandon
+reason or outcome, and creates the HANDOFF page at a project's first close or
+regenerates it after. On a record that is already terminal it verifies (lint,
+`# Review` present) and creates or refreshes the page, exit 0; with `# Review`
+empty it refuses on the lint's finding (exit 3), with the section absent on the
+gate (exit 4), in both cases unless `--skip-review` records the skip, the one
+write it makes to a terminal record; `--outcome` is ignored there. Projects that do
+not want the page set `handoff-regen-at-close: false` in
+`~/.claude/perdure-preferences.json`. Never hand-edit the page.
 
 ### 7. Report
 
-One line to the user: record path, final status, verdict, anything withheld or
-deferred, and the follow-up workflow slug if blockers were deferred.
+One line to the user: record path, final status, verdict or recorded skip,
+anything withheld or deferred, and the follow-up workflow slug if blockers
+were deferred.
 
 ## Safety rules
 
-- Never close over unreconciled lint findings without the user's explicit say-so
-  (record the override if they insist).
+- Never set a terminal status by editing the record; the closer sets it.
+- Never close over unreconciled lint findings without the user's explicit
+  say-so (record the override if they insist).
 - Terminal records are immutable except `supersedes:`/`continued-by:` links —
   continuing work gets a NEW record.
 - This skill edits only the workflow record and the derived HANDOFF page.

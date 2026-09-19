@@ -10,6 +10,9 @@ Three rules, then the detail:
 - One record per unit of multi-step work, under `perdure/workflows/`.
 - A record closes only with a review verdict, or a recorded reason for skipping one.
 - `perdure/HANDOFF.md` is generated from the records, never edited by hand.
+- A record is closed by `close-workflow.py` (the `close` skill runs it), never by
+  editing its status: the closer stamps it, records the outcome or the skip, and
+  creates or refreshes the page.
 
 ### Before you start
 
@@ -63,6 +66,8 @@ Two fields carry weight beyond documentation:
   classify, so `in progress` with a space silently disables them.
 - **`# Review`** must hold a verdict, or a recorded reason for skipping one,
   before the status goes terminal.
+- A decision under **`# Decisions`** that changes a decision recorded in an
+  earlier record names that record on its line and says why.
 
 Skip the record for a typo fix, an obvious one-line edit, or a conversational
 exchange. Write one when a decision was made, an approach was rejected, or
@@ -95,7 +100,7 @@ which tool did the work:
 ```
 rot-lint.py --strict .      # a record contradicts itself
 handoff.py . --check        # the generated page no longer matches its sources
-close-workflow.py <slug>    # refuses a close with no review verdict
+close-workflow.py <slug>    # refuses a close with no review verdict (--skip-review "<reason>" records a conscious skip)
 ```
 
 If this repository defines a local entry point for these, prefer it. Under
