@@ -7,7 +7,8 @@ run `python3` can run the verification.
 
 Three rules, then the detail:
 
-- One record per unit of multi-step work, under `perdure/workflows/`.
+- One record per unit of multi-step work, under `perdure/workflows/`, with
+  its plan and decisions written before the first edit.
 - A record closes only with a review verdict, or a recorded reason for skipping one.
 - `perdure/HANDOFF.md` is generated from the records, never edited by hand.
 - A record is closed by `close-workflow.py` (the `close` skill runs it), never by

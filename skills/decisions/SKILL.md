@@ -49,7 +49,9 @@ missing, or an ADR you touch contradicts its INDEX section, say so and offer
 Scan `perdure/workflows/*.md` files' `# Decisions` sections. Show them grouped by
 workflow with status, after the ADR sections. Flag entries marked `{promote}` as
 promotion candidates (`/perdure:decide <slug>` promotes; `/perdure:close`
-also offers promotion at close per the `auto-promote-decisions` preference).
+promotes at close per the `auto-promote-decisions` preference: under the default
+`heuristic`, marked decisions always, plus unmarked ones that pass the
+inheritance test).
 Skip entries already marked `[promoted → #NNN]`.
 
 ### 5. Output

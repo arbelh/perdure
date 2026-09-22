@@ -8,8 +8,9 @@ authority. This generator exists to make that shape safe. Its rules, each
 closing one of those failures:
 
   1. LINT-GATED INCLUSION  every record passes scripts/rot-lint.py first; a
-     record with findings contributes NO state claims — it is listed under
-     "Needs reconciliation" with its finding kinds.
+     record with contradiction findings contributes NO state claims — it is
+     listed under "Needs reconciliation" with its finding kinds. A
+     `placeholder` finding marks the record on the page instead.
   2. STRUCTURED EXTRACTION ONLY  the page carries the status token, the goal
      line, and the record's own # Next step — never freeform status prose.
      Records without conforming frontmatter contribute no status at all.
@@ -297,14 +298,24 @@ def build(root: Path):
     return records
 
 
+def contradictions(r):
+    return [f for f in r.findings if f[0] != "placeholder"]
+
+
+def unwritten(r):
+    return any(f[0] == "placeholder" for f in r.findings)
+
+
 def render(root: Path, records, adrs, page_dir: Path):
     sha = git(["rev-parse", "--short", "HEAD"], root) or "no-git"
     for r in records:
         r.href = os.path.relpath(root / r.rel, page_dir)
     now = datetime.datetime.now().astimezone().isoformat(timespec="minutes")
     name = root.resolve().name
-    flagged = [r for r in records if r.findings]
-    clean = [r for r in records if not r.findings]
+    # a `placeholder` finding is completeness, not contradiction: the record
+    # stays on the page, marked, and only contradictions withhold it
+    flagged = [r for r in records if contradictions(r)]
+    clean = [r for r in records if not contradictions(r)]
     open_recs = sorted([r for r in clean if r.is_open and not r.freeform],
                        key=lambda r: r.updated, reverse=True)
     other = [r for r in clean if not r.freeform and not r.is_open
@@ -340,6 +351,8 @@ def render(root: Path, records, adrs, page_dir: Path):
             L.append(f"  {nxt} · {r.cite()}")
             if r.stale_activity:
                 L.append(f"  ⚠ {r.stale_activity}")
+            if unwritten(r):
+                L.append("  ⚠ plan or next step not written (lint: placeholder)")
     else:
         L.append("- nothing in flight in lint-clean records")
     if parked:
@@ -349,6 +362,8 @@ def render(root: Path, records, adrs, page_dir: Path):
             L.append(f"- {r.goal or '(no goal line)'} · {r.cite()}")
             if r.stale_activity:
                 L.append(f"  ⚠ {r.stale_activity}")
+            if unwritten(r):
+                L.append("  ⚠ plan or next step not written (lint: placeholder)")
     L.append("")
 
     if flagged:
@@ -360,8 +375,9 @@ def render(root: Path, records, adrs, page_dir: Path):
                  "misleads with the summary's authority.")
         L.append("")
         for r in flagged:
-            kinds = ", ".join(sorted({f[0] for f in r.findings}))
-            L.append(f"- [`{r.rel}`]({r.href}) — {len(r.findings)} finding(s): {kinds}")
+            fs = contradictions(r)
+            kinds = ", ".join(sorted({f[0] for f in fs}))
+            L.append(f"- [`{r.rel}`]({r.href}) — {len(fs)} finding(s): {kinds}")
         L.append("")
 
     if freeform:
@@ -537,7 +553,7 @@ def main():
     tmp = out.with_name(f"{out.name}.{os.getpid()}.tmp")
     tmp.write_text(page, encoding="utf-8")
     os.replace(tmp, out)
-    flagged = sum(1 for r in records if r.findings)
+    flagged = sum(1 for r in records if contradictions(r))
     print(f"{out} written: {len(records)} record(s), {flagged} withheld for "
           f"reconciliation")
     sys.exit(0)

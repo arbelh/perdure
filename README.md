@@ -1,6 +1,6 @@
 # perdure
 
-**Checked memory skills for AI coding agents.**
+**Memory skills for AI agents.**
 
 **Resume anywhere. Any task, any session, any model, from a checkout.**
 
@@ -9,19 +9,73 @@ ruled out, what comes next. perdure has AI agents write it as they work, keeps
 it in git beside the code, and checks it like code, so a checkout is the full
 context for the next session, the next agent, or you in three weeks.
 
-<p align="center">
-  <img src="docs/assets/banner.svg" alt="perdure. Start, work, review, close; then, in a new session or a new agent, resume with any model." width="100%">
-</p>
+**How it works.** A plugin for Claude Code and Codex, a skill pack for Cursor
+and 70+ other agents. Install it, add its instructions to your `CLAUDE.md` or
+the project's `AGENTS.md` (`/perdure:install` writes them for you in Claude
+Code), and the agent keeps one markdown record per multi-step task in your
+repository as it works; a Python script checks the record when the task closes
+and generates a one-page handoff. No service, no account, nothing to keep
+running.
+
+The check is a linter for records: a closed record carries its review or a
+written reason for skipping one, a claim that nothing was committed is checked
+against git, and the report states what it covered.
+
+**Quick install**, Claude Code (Codex and other agents: Quick start below):
+
+```bash
+claude plugin marketplace add arbelh/perdure
+claude plugin install perdure@perdure
+```
+
+Then, in a Claude Code session, `/perdure:install` installs the recommended
+setup on enter. From then on the record opens itself.
+
+A real record, from the repository perdure was built in, trimmed:
+
+```markdown
+---
+workflow: dev-changelog-and-plain-tags
+status: completed
+started: 2026-09-15T15:08:55-07:00
+updated: 2026-09-15T15:09:28-07:00
+---
+
+# Goal
+
+Keep the full changelog in the dev tree at CHANGELOG.md (never exported); public
+tags are plain vX.Y.Z
+
+# Decisions
+
+- Dev tree: `CHANGELOG.md` at root, full internal history, never exported.
+  Public: no changelog file; GitHub Releases with notes from …
+- Tags: plain `vX.Y.Z` in the public repository.
+
+# Next step
+
+Done. Future releases: add the internal entry to CHANGELOG.md, write
+maintainer/RELEASE-NOTES-<version>.md, tag …
+
+# Review
+
+Review: skipped — file move and pointer updates pinned by the gate; no
+reviewer dispatched.
+```
 
 ```
   START          WORK           REVIEW         CLOSE                   RESUME
 ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐           ┌───────────┐
 │ one record│─▶│  what was │─▶│independent│─▶│lint · gate│─ ─ ─ ─ ─ ▶│ checkout. │
-│  per task │  │  decided, │  │  verdict, │  │  HANDOFF  │new session│ any model.│
-│           │  │ set aside │  │  appended │  │ on verdict│ new agent │ continues.│
+│per unit of│  │  decided, │  │  verdict, │  │  HANDOFF  │new session│ any model.│
+│   work    │  │ set aside │  │  appended │  │ on verdict│ new agent │ continues.│
 └───────────┘  └───────────┘  └───────────┘  └───────────┘           └───────────┘
   start                         verdict        close                   continue
 ```
+
+<p align="center">
+  <img src="docs/assets/banner.svg" alt="perdure. Start, work, review, close; then, in a new session or a new agent, resume with any model." width="100%">
+</p>
 
 ---
 
@@ -35,9 +89,10 @@ is about to try the one you rejected last week.
   <img src="docs/assets/two-sessions.svg" alt="The record travels with the code; the next session starts where the last one stopped. With perdure: work plus record, session ends, continue, any model. Without perdure: work, session ends, context gone, re-explain." width="100%">
 </p>
 
-perdure makes the checkout the memory. Install once, and the model opens a
-record when a task begins, writes it as it works, the hook checks it, and the
-close needs a verdict. Nothing else changes in how you work.
+perdure makes the checkout the memory. Install once, add its instructions,
+and the model opens a record when a task begins, writes it as it works, and
+closes it through the check, which needs a verdict or a recorded skip. Nothing
+else changes in how you work.
 
 If you know decision records, you know half of perdure. The other half is the
 same idea applied to the whole task, written by the agent and checked by a
@@ -78,9 +133,12 @@ The plugin install adds the `/perdure:*` commands and two hooks: the lint runs
 on its own when a record closes, and sessions can be archived before `/compact`.
 `/perdure:install` is what makes it automatic. It writes the records directive
 into `~/.claude/CLAUDE.md`, so the model opens a record when a task begins and
-closes it when the work is done, without being asked, and it asks a few
-preference questions. Skip it and you drive with `/perdure:start`.
-`/perdure:health` checks the setup; `/perdure:uninstall` reverses everything.
+closes it when the work is done, without being asked; enter installs the
+recommended setup, "adjust" walks the options. Skip it and you drive with
+`/perdure:start`.
+`/perdure:health` checks the setup. `/perdure:uninstall` removes the directive,
+the `AGENTS.md` marker block and the preferences file; `claude plugin uninstall
+perdure@perdure` removes the plugin.
 Later, `claude plugin marketplace update perdure` then
 `claude plugin update perdure@perdure` moves you to the newest release.
 
@@ -200,7 +258,8 @@ agent can read, with its scripts beside it.
   <img src="docs/assets/lint-output.svg" alt="Checked: every record, against every check. Not checked: whatever was skipped, named with its reason. Verdict: a pass, or the exact contradiction found. A pass means exactly what it says." width="100%">
 </p>
 
-It runs at every close, on its own. Nothing is counted as passed that was never
+It runs at every close: the close skill runs it in every tool, and in Claude
+Code a hook runs it on its own. Nothing is counted as passed that was never
 looked at.
 
 ---
@@ -289,7 +348,7 @@ skills/            the fourteen skills — what any agent reads
 scripts/           rot-lint · handoff · close-workflow · new-workflow · coverage · raw-index · export-session
 hooks/             close gate · pre-compact archive
 docs/              RECORDS-CONVENTION.md · THREE-LAYERS.md
-templates/         AGENTS.md — the stanza your project receives
+templates/         AGENTS.md — the instructions your project receives
 ```
 
 </details>

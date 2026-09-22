@@ -38,9 +38,9 @@ stale) — this check exists so it can't happen quietly.
 - `~/.claude/CLAUDE.md` contains the `<!-- perdure-records:begin -->` …
   `<!-- perdure-records:end -->` marker block
 - `~/.claude/perdure-preferences.json` exists; show the active preference values. Ignore
-  deprecated keys and keys owned by other tooling (`parallel-exploration`, `orchestration-mode`,
-  `suggest-agent-skills`, `auto-reindex`, `archive-location`,
-  `headless-budget-usd`, `headless-result-inline-threshold`) silently.
+  deprecated keys and keys owned by other tooling (`workflow-files`, `verbose-status`,
+  `parallel-exploration`, `orchestration-mode`, `suggest-agent-skills`, `auto-reindex`,
+  `archive-location`, `headless-budget-usd`, `headless-result-inline-threshold`) silently.
 
 ### 3. Current project records
 

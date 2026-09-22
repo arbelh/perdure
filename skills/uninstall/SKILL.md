@@ -1,31 +1,37 @@
 ---
 name: uninstall
 description: Reverse the changes made by /perdure:install. Removes the perdure
-  records directive from your CLAUDE.md and deletes the preferences file (all
-  backed up first). Does not uninstall the plugin itself — use /plugin uninstall
-  for that.
+  records directive from your CLAUDE.md, the marker block from the project's
+  AGENTS.md when present, and deletes the preferences file (all backed up
+  first). Does not uninstall the plugin itself — use /plugin uninstall for that.
 disable-model-invocation: true
 ---
 
 # perdure: uninstall personal config
 
-Edits `~/.claude/CLAUDE.md` and Claude Code's preferences file.
+Edits `~/.claude/CLAUDE.md`, Claude Code's preferences file and, when present,
+the marker block in the project's `AGENTS.md` at the repository root, found
+with `git rev-parse --show-toplevel`, the skill's one shell-out.
 
 You reverse changes made by `/perdure:install`. This does NOT uninstall
-the plugin itself — it only removes the personal configuration additions.
+the plugin itself — it only removes the configuration additions.
 
-**Scope note for Claude:** This skill only reads and writes files under `~/.claude/`.
-Do not run `find` or shell out to locate the plugin's install directory — you do
-not need it here. If a future step ever requires plugin-owned files, reference
-them via `$CLAUDE_PLUGIN_ROOT` (Claude Code sets this automatically when plugin
-code runs).
+**Scope note for Claude:** this skill reads and writes files under `~/.claude/`
+and the marker block of the project's `AGENTS.md` at the repository root. Its
+one shell-out is `git rev-parse --show-toplevel`; do not shell out to locate
+the plugin's install directory.
+`~/.claude/`. Do not run `find` or shell out to locate the plugin's install
+directory — you do not need it here. If a future step ever requires plugin-
+owned files, reference them via `$CLAUDE_PLUGIN_ROOT` (Claude Code sets this
+automatically when plugin code runs).
 
 ## Introduction
 
 ```
 I'll reverse the configuration added by /perdure:install:
 1. Remove the perdure records directive from ~/.claude/CLAUDE.md
-2. Delete ~/.claude/perdure-preferences.json (backed up first)
+2. Remove the perdure marker block from this repository's AGENTS.md, if present
+3. Delete ~/.claude/perdure-preferences.json (backed up first)
 
 Each step shows the diff before applying. Everything creates .bak files.
 
@@ -50,7 +56,22 @@ Look for the marker block in `~/.claude/CLAUDE.md`:
 - If found: back up to `.bak`, remove lines between markers (inclusive), save
 - Show diff before writing
 
-## Step 2: Remove preferences file
+## Step 2: Remove the project AGENTS.md marker block
+
+### Detect
+- If `git rev-parse --show-toplevel` fails: "Not in a git repository, skipping."
+- Otherwise look for the `<!-- perdure-records:begin -->` …
+  `<!-- perdure-records:end -->` block in `<toplevel>/AGENTS.md`
+
+### Apply
+- If the file or the markers are not found: "No perdure block in AGENTS.md,
+  skipping."
+- If found: back up to `.bak`, remove the lines between the markers (inclusive),
+  save; if nothing but whitespace remains, say so and leave the file for the
+  user to delete
+- Show the diff before writing; never touch text outside the markers
+
+## Step 3: Remove preferences file
 
 ### Detect
 Does `~/.claude/perdure-preferences.json` exist?
@@ -59,13 +80,14 @@ Does `~/.claude/perdure-preferences.json` exist?
 - If not found: "No preferences file found, skipping."
 - If found: show content for confirmation, back up to `.bak`, then delete
 
-## Step 3: Verification
+## Step 4: Verification
 
 ```
 ✅ perdure personal config removed
 
 Files modified:
   - ~/.claude/CLAUDE.md (backed up to .bak, markers removed)
+  - <repository root>/AGENTS.md (marker block removed, .bak saved; when present)
   - ~/.claude/perdure-preferences.json (deleted, backup saved)
 
 The plugin itself is still installed. To fully uninstall:
@@ -85,7 +107,8 @@ file history, NOT your perdure/ files — use the CLI:
   $ claude project purge .              # current project, with confirmation
   $ claude project purge . --dry-run    # preview without changes
 
-`/perdure:uninstall` only touches user-global config under ~/.claude/.
+`/perdure:uninstall` touches ~/.claude/ and the marker block of AGENTS.md, nothing
+else.
 ```
 
 ## Safety rules

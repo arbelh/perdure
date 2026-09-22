@@ -62,9 +62,12 @@ Promote a decision when a task that never reads this record must still obey
 it — a default, a name, a boundary, a rule — and it can be stated in one
 sentence without this task's filenames. Size does not matter: a one-line
 default other tasks inherit qualifies; a ten-file refactor's local choices do
-not. Apply the `auto-promote-decisions` preference (`none` lists and asks,
-`tagged` takes `{promote}` marks, `heuristic` applies this test, `all`
-promotes everything). Two homes: an ADR via `/perdure:decide <slug>` when the
+not. Apply the `auto-promote-decisions` preference: `none` lists the decisions
+and asks; `tagged` promotes the ones marked `{promote}` and nothing else;
+`heuristic` (the default) promotes every marked decision and, in addition, any
+unmarked one that passes this test, so a mark always wins over the test; `all`
+promotes everything. Next to each promoted decision write whether the mark or
+the test promoted it. Two homes: an ADR via `/perdure:decide <slug>` when the
 why and the alternatives matter, marking the decision `[promoted → #NNN]`; or,
 when only the rule matters, propose a one-line addition to the project's
 instruction file (`CLAUDE.md` or `AGENTS.md`) for the user to place — perdure

@@ -36,6 +36,16 @@ You are restoring a workflow's state so work can continue.
   reopen (changes status back to `in-progress`) or just display the state
 - If `status: in-progress`: proceed with resumption
 
+### 3b. Check the plan
+- If `# Plan` still holds the scaffold placeholder or has no items, write the
+  plan now from the goal, the diff and what is left, before continuing; say so
+  in the resume message. The lint reports this as `placeholder`.
+- To see it, run the lint on the record:
+  `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/rot-lint.py" <workflow-file>`
+  (`${CLAUDE_PLUGIN_ROOT}` is the plugin directory, set by Claude Code. Without
+  it, the same script sits in the plugin checkout's root `scripts/` directory,
+  or in `scripts/` beside this SKILL.md in a skills-CLI install.)
+
 ### 4. Re-inject state into conversation
 Present to the user and load into context:
 
@@ -82,13 +92,15 @@ Ready to continue? I'll pick up from "<next step>".
 
 ### 6. Continue the work
 After resumption, continue from `# Next step` however this session works —
-inline, or through whatever agents the user has. Close through the gate when
+inline, or through whatever agents the user has. Do not start editing on a
+placeholder plan: step 3b writes one first. Close through the gate when
 done (`/perdure:verdict`, then `/perdure:close`).
 
 ## Safety rules
 
 - **Never modify** content of Findings, Decisions, Files modified sections — those
-  are historical record
+  are historical record (the close pass's append-only promotion annotations are
+  the one exception)
 - **Always show** the user what's being restored before injecting into context
 - **Respect completed/abandoned status** — reopening requires explicit user confirmation
 - **Graceful missing file**: if no workflow matches, say so clearly and suggest

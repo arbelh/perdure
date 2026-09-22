@@ -12,6 +12,8 @@ one list, and eval T14 asserts it equals what the code emits):
   status-nonascii        non-ASCII (possible homoglyph) in the status value
   status-vs-git          "nothing committed" vs commits on the record's files
   review-gate-vs-status  terminal status over an empty or pending # Review
+  placeholder            the scaffold's own # Plan / # Next step text left in place,
+                         or a # Plan with no items
 
 REMOVED in v3.9.0, and worth saying why. Three checks (intra-line,
 status-vs-body, terminal-vs-blocked) matched a fixed table of English
@@ -76,7 +78,7 @@ DATEISH = re.compile(r"\b(20\d\d-\d\d-\d\d)\b")
 # code is precisely the rot class this tool exists to catch (audit 2026-09-04).
 CHECKS = (
     "structure", "conflict-marker", "status-nonascii", "status-vs-git",
-    "review-gate-vs-status",
+    "review-gate-vs-status", "placeholder",
 )
 NAME_CAP = 3        # records named in the not-checked block before "… and N more"
 # The one "unchecked" reason that is about the RUN, not the record: no file
@@ -88,9 +90,11 @@ NO_GIT = "not inside a git repository"
 RUN_LEVEL = {NO_GIT}
 SCOPE = (
     "\nscope: each check compares fields perdure writes (status, headings, tables,\n"
-    "# Review) against each other, or against git. A contradiction stated only\n"
-    "in prose is not read at all. No external system is read. \"ran\" means the\n"
-    "check examined the record, not that the record is true."
+    "# Review) against each other, against git, or against the scaffold's own\n"
+    "placeholder text (a # Plan with no items is the one check that compares\n"
+    "against nothing). A contradiction stated only in prose is not read at all.\n"
+    "No external system is read. \"ran\" means the check examined the record, not\n"
+    "that the record is true."
 )
 
 
@@ -115,6 +119,32 @@ def fenced_lines(lines):
         if in_fence:
             fenced.add(n)
     return fenced
+
+
+def find_heading(lines, name, fenced, regex=False):
+    """(line_no, level) of the first H1-H3 `# <name>` heading outside a fence,
+    else (None, 0). Fenced headings are quoted text — the README, the docs and
+    the install skill all show the scaffold inside ``` blocks."""
+    for n, l in enumerate(lines, 1):
+        if n in fenced:
+            continue
+        pat = name if regex else re.escape(name)
+        m = re.match(rf"(#{{1,3}})\s+{pat}\b", l)
+        if m:
+            return n, len(m.group(1))
+    return None, 0
+
+
+def section_body(lines, heading_ln, level, fenced):
+    """(line_no, text) for the section under a heading, up to the next heading
+    at its own level or shallower, fenced lines dropped."""
+    out = []
+    for n in range(heading_ln, len(lines)):
+        if re.match(rf"#{{1,{level}}}\s+\S", lines[n]):
+            break
+        if n + 1 not in fenced:
+            out.append((n + 1, lines[n]))
+    return out
 
 
 def find_status(lines):
@@ -383,6 +413,47 @@ def lint_report(path: Path):
             elif pending:
                 findings.append(("review-gate-vs-status", sn, status.strip()[:160],
                                  pending, lines[pending - 1].strip()[:160]))
+
+    # -- placeholder: the scaffold's own # Plan / # Next step text left in
+    #    place. Measured 2026-09-22: headless, the start skill created the
+    #    record before the first edit as the directive requires, and then went
+    #    straight to code over "- [ ] (fill after exploration / planning)" in 2
+    #    of 4 sessions; the sessions that resumed from those records gained
+    #    nothing from them. A record exists to carry the plan and the decisions
+    #    across a cut, so an unwritten plan is the one defect that empties it.
+    #    Unlike the other checks this one compares a field against the
+    #    SCAFFOLD's own text rather than against another field, and it fires at
+    #    any status: the plan is wanted before the first edit, not at close.
+    pl_ln, pl_lvl = find_heading(lines, "Plan", fenced)
+    nx_ln, nx_lvl = find_heading(lines, r"Next steps?", fenced, regex=True)
+    cov["placeholder"] = (("ran", None) if (pl_ln or nx_ln)
+                          else ("n/a", "no # Plan or # Next step heading"))
+    # anchored to the scaffold's own lines: a plan item that QUOTES the
+    # placeholder in prose or inline code is the record's own text, not the
+    # scaffold's (review 2026-09-22)
+    plan_ph = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s*\[[ xX]\]\s*"
+                         r"\(fill after exploration / planning\)\s*$")
+    item = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+\[[ xX-]\]")
+    next_ph = re.compile(r"^\s*\(fill — the resume point\)\s*$")
+    if pl_ln:
+        plan = section_body(lines, pl_ln, pl_lvl, fenced)
+        head = lines[pl_ln - 1].strip()[:160]
+        if any(plan_ph.match(l) for _, l in plan):
+            findings.append(("placeholder", pl_ln, head, 0,
+                             "# Plan holds the scaffold placeholder — write the "
+                             "plan; a record without one carries nothing across "
+                             "a cut"))
+        elif not any(item.match(l) for _, l in plan):
+            findings.append(("placeholder", pl_ln, head, 0,
+                             "# Plan has no items — write the plan; a record "
+                             "without one carries nothing across a cut"))
+    # A missing # Next step heading is not flagged: freeform records are the
+    # convention's norm, and only the scaffold's own wording is evidence here.
+    if nx_ln and any(next_ph.match(l) for _, l in
+                     section_body(lines, nx_ln, nx_lvl, fenced)):
+        findings.append(("placeholder", nx_ln, lines[nx_ln - 1].strip()[:160], 0,
+                         "# Next step holds the scaffold placeholder — write "
+                         "the resume point"))
 
     # -- structure: duplicate numbered-table ids ACROSS a shared numbering
     #    namespace. A table whose own numbering restarts at 1 opens a fresh

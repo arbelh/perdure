@@ -1,6 +1,7 @@
 ---
 name: start
-description: Start a new perdure workflow with a persistent state file. Creates
+description: Start a new perdure workflow with a persistent state file. Writes
+  the plan and the decisions before the first edit, then creates
   perdure/workflows/YYYY-MM-DD-<slug>.md per the records convention and prepares
   the state structure to be updated at each checkpoint. Use at the start of any
   complex multi-step task that should survive compaction, /clear, or be resumable
@@ -31,7 +32,25 @@ by judgment; the main session always has the Agent tool) → **review gate**
 
 ## Steps
 
-### 1. Create the workflow file
+### 1. Write the plan and the decisions before touching code
+
+From the request as it stands, draft three things:
+
+- **The plan**, as checkboxes: the deliverables the user named, one per line,
+  including the tests and the docs when the request asks for them.
+- **The decisions** the request already settles: the constraints it fixes, the
+  approaches it rules out, and why.
+- **The first next step** — the resume point a fresh session would start from.
+
+Do this before reading or editing any project file. If you cannot plan yet, the
+first item is the exploration itself and the second is "write the plan from what
+exploration shows". Never leave the scaffold placeholder lines: a placeholder
+plan is a lint finding (`placeholder`) and the closer refuses to close over it.
+
+A record whose plan was never written exists but carries nothing: a session
+resuming from it reads a goal and starts over.
+
+### 2. Create the workflow file
 
 The canonical schema (frontmatter keys, recommended sections, statuses, commit
 policy) is `docs/RECORDS-CONVENTION.md` in this plugin, also at
@@ -55,18 +74,19 @@ updated: <ISO 8601>
 <1-3 sentences — ask the user if not clear from context>
 
 # Plan
-- [ ] <tasks>
+- [ ] <the plan items from step 1 — never the scaffold placeholder>
 
 # Findings
 
 # Decisions
+- <the decisions from step 1, if the request settles any>
 
 # Files modified
 
 # Open questions
 
 # Next step
-<what happens next>
+<the first next step from step 1>
 
 # Review
 <empty until the review gate runs>
@@ -84,7 +104,7 @@ Workflow files are **committed by default** — they are the context a checkout
 carries for whoever picks the work up next. (Archives are the opt-in privacy
 layer, not these.)
 
-### 2. Report
+### 3. Report
 
 ```
 ✅ Workflow started: <date>-<slug>
@@ -116,10 +136,13 @@ Codex install keeps the whole checkout), in `scripts/` beside this SKILL.md (a
 skills-CLI install), or in your clone of `github.com/arbelh/perdure`.)
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/new-workflow.py" <slug> --goal "<goal>"
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/new-workflow.py" <slug> --goal "<goal>" \
+  --plan "<item>" --plan "<item>" --decision "<text>" --next "<first step>"
 ```
 
 Same schema, no model involvement, refuses to overwrite (exit 2 if exists).
+`--plan` and `--decision` repeat. Left out, `--plan` keeps the placeholder line
+and the script says so on stderr — the lint then reports it as `placeholder`.
 
 ## Safety rules
 
