@@ -47,6 +47,17 @@ Known out of scope: a contradiction stated only in ordinary prose is not read
 at all. The phrase table that attempted it is gone, for the reasons above.
 External-system state is never read.
 
+PROJECT ROOTS, two project-level reports (4.3.0). A nested project's records
+folder (<root>/sub/perdure/workflows) is not linted by a run at <root>; a
+stderr note names each one and the command that lints it — a note, never a
+finding, so exit codes are unchanged. And two files in perdure/decisions/
+claiming one id (two branches that each numbered a decision, then merged) is
+a `decision-id` finding naming both files: it counts in the verdict and fails
+--strict, and it is reported in its own block, with its own coverage line,
+because it is a fact about the project, not a check of any one record. The
+paths a record names resolve against its project root (the folder holding its
+perdure/), the base handoff.py uses (scripts/_paths.py).
+
 Usage: rot-lint.py [--strict] [record.md ... | project-root | records-dir]
        A project root — any directory holding .git or perdure/ — lints
        perdure/workflows/*.md and reports zero records when none exist yet;
@@ -54,6 +65,8 @@ Usage: rot-lint.py [--strict] [record.md ... | project-root | records-dir]
        other directory is linted as a directory OF records: every .md in it,
        INDEX.md excepted. A project's subdirectory holds neither marker and
        is therefore linted as a records directory, not walked up to its root.
+       A project root also gets the nested-records note and the decision-id
+       check described above.
 """
 from __future__ import annotations
 import importlib.util, os, re, subprocess, sys
@@ -64,6 +77,16 @@ _sv_spec = importlib.util.spec_from_file_location(
     "_status_vocab", Path(__file__).resolve().parent / "_status_vocab.py")
 sv = importlib.util.module_from_spec(_sv_spec)
 _sv_spec.loader.exec_module(sv)
+# shared project paths (project root, git top) and decision ids — the same
+# definitions handoff.py, next-adr-id.py and the hooks use
+_pa_spec = importlib.util.spec_from_file_location(
+    "_paths", Path(__file__).resolve().parent / "_paths.py")
+pa = importlib.util.module_from_spec(_pa_spec)
+_pa_spec.loader.exec_module(pa)
+_di_spec = importlib.util.spec_from_file_location(
+    "_decision_ids", Path(__file__).resolve().parent / "_decision_ids.py")
+di = importlib.util.module_from_spec(_di_spec)
+_di_spec.loader.exec_module(di)
 
 # The one phrase left, and it is a GATE rather than a verdict: it decides
 # whether to ask git, and git supplies the answer. The phrase table that
@@ -260,10 +283,19 @@ def lint_report(path: Path):
     # subdirectory printed the environmental "not inside a git repository" for a
     # record that was (review 2026-09-04); resolve() would re-home symlinked
     # records, which the hook deliberately avoids (rot-lint-gate.py normpath)
-    repo = Path(os.path.abspath(path))
-    while repo.parent != repo and not (repo / ".git").exists():
-        repo = repo.parent
-    if not (repo / ".git").exists():
+    # The paths a record names resolve against its PROJECT ROOT (the folder
+    # holding its perdure/), and git runs from there; whether git is asked at
+    # all depends on finding a git top above it. Before 4.3.0 they resolved
+    # against the first .git above the record, so a project inside a repo
+    # subfolder read `src/x.py` as <repo>/src/x.py while handoff.py read it as
+    # <project>/src/x.py. scripts/_paths.py holds the one definition; a record
+    # outside any perdure/workflows/ keeps the git top as its base.
+    rec_abs = Path(os.path.abspath(path))
+    proj = pa.records_root_of(rec_abs)
+    top = pa.git_top(proj or rec_abs.parent)
+    repo = proj or top                   # the base named paths resolve against
+    in_git = top is not None
+    if not in_git:
         cov["status-vs-git"] = ("unchecked", NO_GIT)
     elif not sn:
         cov["status-vs-git"] = ("unchecked", "no status line")
@@ -273,7 +305,7 @@ def lint_report(path: Path):
         cov["status-vs-git"] = ("n/a", 'status carries no "nothing committed" claim')
     else:
         cov["status-vs-git"] = ("ran", None)
-    if (repo / ".git").exists() and sn and NEG_GIT.search(status):
+    if in_git and sn and NEG_GIT.search(status):
         since = started_date(lines)
         # paths the record itself names, that exist in the repo
         cands = set(re.findall(r"`([\w./-]+/[\w.-]+\.\w{2,7})`", "\n".join(lines)))
@@ -560,6 +592,40 @@ def print_coverage(reports):
     return n_gap
 
 
+def nested_records(root: Path, home=None):
+    """perdure/workflows folders BELOW a project root, each a nested project's.
+
+    A root-mode run lints <root>/perdure/workflows only. The scan that names
+    the others never enters .git, node_modules, a .claude/worktrees folder
+    (each is a checkout of this same repository), a records root (perdure/),
+    or any folder that holds its own .git (file or dir: a submodule, a nested
+    clone) — those are other repositories, linted from their own tops. Symlinked
+    folders are not followed. Returns the workflows folders, sorted; None at the
+    home folder, which is never walked.
+    """
+    root = Path(root)
+    home = Path(home) if home is not None else Path.home()
+    if os.path.realpath(str(root)) == os.path.realpath(str(home)):
+        return None                  # never walk the whole home folder (4.3.0: notes may live in ~/perdure)
+    found = []
+    for dirpath, dirnames, _ in os.walk(root):
+        here = Path(dirpath)
+        keep = []
+        for name in sorted(dirnames):
+            sub = here / name
+            if name in (".git", "node_modules") or (name == "worktrees" and here.name == ".claude"):
+                continue
+            if pa.has_git(sub):
+                continue
+            if name == "perdure":
+                if here != root and (sub / "workflows").is_dir():
+                    found.append(sub / "workflows")
+                continue
+            keep.append(name)
+        dirnames[:] = keep
+    return sorted(found)
+
+
 def main():
     # This tool prints non-ASCII markers. stdout defaults to the LOCALE
     # encoding with errors='strict', so on a non-UTF-8 machine printing a
@@ -578,6 +644,7 @@ def main():
     argv = [a for a in sys.argv[1:] if a != "--strict"]
     strict = "--strict" in sys.argv
     targets = []
+    roots = []                           # (target as given, Path) linted as project roots
     for a in (argv or ["."]):
         p = Path(a)
         if p.is_dir():
@@ -588,7 +655,9 @@ def main():
                 # looking elsewhere. The previous `glob(...) or glob(...)`
                 # treated the empty list as falsy and fell through.
                 targets += sorted(wf.glob("*.md"))
+                roots.append((a, p))
             elif (p / ".git").exists() or (p / "perdure").is_dir():
+                roots.append((a, p))
                 # A project root with no workflows directory yet — every
                 # first run. Zero records. Before 3.9.1 this reached the
                 # branch below and reported README.md as a record whose
@@ -616,6 +685,29 @@ def main():
             # (pre-publish verification, 2026-08-31).
             print(f"cannot lint '{a}': no such file or directory", file=sys.stderr)
             sys.exit(2)
+    # Project-root extras, both 4.3.0. (1) Records folders of NESTED projects
+    # are not linted here — they belong to their own project roots — but a run
+    # at a repo top used to skip them without a word, so `--strict .` at the
+    # top passed over records it never read. Named on stderr: a note, never a
+    # finding, so exit codes are unchanged. (2) Two decision files claiming
+    # one id (two branches that each numbered a decision, merged) is a
+    # PROJECT-level finding: it counts in the verdict and fails --strict, but
+    # it is reported in its own block, not as a record check in the table.
+    dec_reports = []                     # (decisions dir as given, dups, unread, n_files)
+    for a, p in roots:
+        nested = nested_records(p)
+        if nested is None:
+            print(f"note: {a} is the home folder; its subfolders were not scanned "
+                  "for nested records folders", file=sys.stderr)
+        elif nested:
+            print(f"note: {len(nested)} records folder(s) below {a} belong to nested "
+                  "projects and were not linted — lint each from its own project root:",
+                  file=sys.stderr)
+            for w in nested:
+                print(f"  rot-lint.py {w.parent.parent}   ({w})", file=sys.stderr)
+        dups, unread, n_files = di.duplicates(p)
+        if n_files:
+            dec_reports.append((p / di.DECISIONS_REL, dups, unread, n_files))
     reports = []                         # (path, findings, coverage, info)
     for t in targets:
         if t.name == "INDEX.md":
@@ -634,16 +726,39 @@ def main():
                 print(f"  [{kind}] {loc}")
                 print(f"    {a}")
                 print(f"    ⟂ {b}")
+    for ddir, dups, _, _ in dec_reports:
+        if dups:
+            print(f"\n{ddir}")
+            for i, files in dups:
+                print(f"  [decision-id] id {i:03d} is claimed by {len(files)} files")
+                print(f"    {files[0].name}")
+                for other in files[1:]:
+                    print(f"    ⟂ {other.name}")
+                print("    renumber all but one; scripts/next-adr-id.py prints the next free id")
     # counted AFTER printing, from the stored lists, so a mutation during the
     # print loop is still counted and rowed
-    total = sum(len(fs) for _, fs, _, _ in reports)
+    total = sum(len(fs) for _, fs, _, _ in reports) + sum(len(d[1]) for d in dec_reports)
     # findings first, coverage after: the close-gate hook keys on the VERDICT
     # line (the last line, "ROT: …") when findings exist, and when it must
     # truncate it cuts the findings head and keeps this coverage tail
     n_unchecked = print_coverage(reports)
+    # the decision-id check reports its own coverage too: how many files it
+    # compared, and the ones it could not read an id from
+    for ddir, dups, unread, n_files in dec_reports:
+        line = (f"\ndecision ids: {n_files} file(s) in {ddir} compared — "
+                + (f"{len(dups)} id(s) claimed by more than one file" if dups
+                   else "no id is claimed by two files"))
+        if unread:
+            names = ", ".join(u.name for u in unread[:NAME_CAP])
+            more = f" … and {len(unread) - NAME_CAP} more" if len(unread) > NAME_CAP else ""
+            line += (f"; {len(unread)} file(s) carry no id this tool can read and "
+                     f"were not compared: {names}{more}")
+        print(line)
     n = len(reports)
-    verdict = (f"ROT: {total} finding(s) across {n} record(s)" if total
-               else f"no findings across {n} record(s)")
+    n_dec = sum(d[3] for d in dec_reports)
+    scope = f"{n} record(s)" + (f" and {n_dec} decision file(s)" if n_dec else "")
+    verdict = (f"ROT: {total} finding(s) across {scope}" if total
+               else f"no findings across {scope}")
     if n_unchecked:
         verdict += f" — {n_unchecked} record(s) carry a check that could not run"
     print(f"\n{verdict}")

@@ -37,18 +37,32 @@ If unsure, ask the user: "Will another task have to obey this without reading th
 ## Steps
 
 ### 1. Verify the directory
-If `perdure/decisions/` doesn't exist, create it.
+If `perdure/decisions/` doesn't exist, create it. Do this first: `next-adr-id.py`
+exits 2 when it finds no `perdure/` folder at or above where it runs.
 If `perdure/decisions/INDEX.md` doesn't exist, create it with the skeleton (see step 5).
 
 ### 2. Resolve slug, ID, and filename
 
 **Slug**: from `$1` or ask the user (kebab-case, e.g., `sqlite-over-redis`).
 
-**ID**: next available 3-digit number based on existing ADRs:
+**ID**: the next free 3-digit number. From the project root, run:
 ```
-ls perdure/decisions/*.md | grep -oE '[0-9]{3}' | sort -n | tail -1
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/next-adr-id.py" --root .
 ```
-Increment by 1. Pad to 3 digits (001, 002, ..., 100, 101).
+It prints the id to use (`001` for the first decision): one more than the
+highest id in `perdure/decisions/` or on any local or remote-tracking branch,
+so two branches do not take the same number. (`${CLAUDE_PLUGIN_ROOT}` is the
+plugin directory, set by Claude Code. Without it, the same script sits in the
+plugin checkout's root `scripts/` directory, or in `scripts/` beside this
+SKILL.md in a skills-CLI install.)
+
+Where no script can be reached, read the highest id from the id position of
+the names, exactly three digits after the date (it sees the checked-out branch
+only):
+```
+ls perdure/decisions/ | sed -nE 's/^[0-9]{4}-[0-9]{2}-[0-9]{2}-([0-9]{3})-.*/\1/p' | sort -n | tail -1
+```
+Add 1 and pad to 3 digits; no output means `001`.
 
 **Filename**: `YYYY-MM-DD-<id>-<slug>.md`
 Example: `2026-05-10-005-sqlite-over-redis.md`
@@ -164,6 +178,23 @@ Add the new ADR to the **Active** section:
 
 Update the `updated:` frontmatter timestamp.
 
+**On a merge conflict in INDEX.md**, keep the rows from both sides, ordered by
+id. If both branches took the same id, rot-lint reports a `decision-id`
+finding. Fix it by renumbering the later decision to the id `next-adr-id.py`
+prints, and every reference to it, in decisions and records, terminal ones
+included:
+
+- its file name and its `id:`
+- its INDEX row
+- each `related-decisions` entry that names it, in other decisions
+- each `ADR-NNN` mention of it, and each `[promoted → #NNN]` mark that points
+  at it
+
+A mention of the shared number belongs to the branch that added it
+(`git log -S'ADR-NNN'` on that branch finds the commit). Renumber the later
+decision's branch's mentions; leave the rest unchanged, and change nothing
+else.
+
 ### 6. Check .gitignore
 
 Ask the user: "Commit `perdure/decisions/` to git?"
@@ -191,10 +222,11 @@ Next steps:
 ## Safety rules
 
 - Never overwrite an existing ADR file
-- Always increment ID atomically (check existing files first)
+- Always number with `next-adr-id.py` (it checks the files and every branch)
 - Never set `status: superseded` on creation (that's only set later)
 - Keep ADR files immutable after `status: accepted` except:
   - Adding `superseded-by` when a new ADR supersedes this
   - Updating status to `deprecated` with reason
   - Backfilling `implementing-commits` after code ships
+  - Renumbering a decision whose number another branch also took (step 5)
 - Always update INDEX.md in the same operation as ADR file creation

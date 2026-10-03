@@ -43,9 +43,18 @@ surviving negatives. A record must not go terminal while its status lies.
 The `# Review` section must carry a verdict block (schema in
 `docs/RECORDS-CONVENTION.md`, also at `references/RECORDS-CONVENTION.md`
 beside this SKILL.md in a skills-CLI install) or an explicitly recorded skip
-with a reason. Offer `/perdure:verdict <slug>` before closing. With no reviewer
-available, the closer's `--skip-review "<reason>"` writes the convention's
-recorded skip and closes on it; the skip becomes part of the record.
+with a reason. Do not ask which:
+
+- The task changed files: run the review gate, `/perdure:verdict <slug>`,
+  before closing. With no reviewer available, the closer's
+  `--skip-review "<reason>"` writes the convention's recorded skip and closes
+  on it.
+- The task changed none (planning only, a dropped plan): record a conscious
+  skip with its reason, `--skip-review "<reason>"`. For a dropped plan,
+  `--abandon "<why>"` alone is enough: the closer records the abandon reason
+  as the skip.
+
+The skip becomes part of the record.
 
 ### 3. Decisions that change an earlier record
 
@@ -87,8 +96,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/close-workflow.py" <slug> [--abandon "<re
 ```
 
 It refuses on an empty `# Review` (exit 4) unless `--skip-review` records the
-skip, refuses on lint findings (exit 3; `--force-lint` overrides, record why),
-sets the canonical terminal status, stamps `updated:`, appends the abandon
+skip (or, with `--abandon`, the abandon reason is recorded as it), refuses on
+lint findings (exit 3; `--force-lint` overrides, record why), sets the
+canonical terminal status, stamps `updated:`, appends the abandon
 reason or outcome, and creates the HANDOFF page at a project's first close or
 regenerates it after. On a record that is already terminal it verifies (lint,
 `# Review` present) and creates or refreshes the page, exit 0; with `# Review`
@@ -109,6 +119,7 @@ were deferred.
 - Never set a terminal status by editing the record; the closer sets it.
 - Never close over unreconciled lint findings without the user's explicit
   say-so (record the override if they insist).
-- Terminal records are immutable except `supersedes:`/`continued-by:` links —
-  continuing work gets a NEW record.
+- Terminal records are immutable except `supersedes:`/`continued-by:` links
+  and a decision renumbering (the decide skill's step 5) — continuing work
+  gets a NEW record.
 - This skill edits only the workflow record and the derived HANDOFF page.

@@ -29,24 +29,45 @@ Deliberately NOT here: transcript payloads (that is Tier A, unbuilt and
 unapproved), and any judgement about whether a session should have produced a
 record (that is a consumer of this file, not this file).
 
+The population spans every transcript folder of the project (4.3.0): Claude
+Code files a session under the folder it started in, so sessions started in a
+subfolder or in a worktree (.claude/worktrees/x) sit in folders of their own,
+named by the project's slug plus a suffix. Those count when their recorded
+cwd lies inside the project; a look-alike sibling (/a/b-c beside /a/b) does
+not. The index records no folder name either way. A session in such a folder
+that records no cwd at all cannot be placed, so it is left out — and counted on
+stderr, never dropped silently (ADR-008, 4.3.0).
+
+The home folder is refused as --root (4.3.0): every project's transcript
+folder starts with the home folder's slug, so its population would be every
+session on the machine. The pre-compact hook skips it for the same reason.
+
 Usage:
   raw-index.py [--root DIR]        sweep and update perdure/raw/INDEX.jsonl
   raw-index.py --verify [--root D] re-derive and compare; exit 1 on mismatch
   raw-index.py --summary           print the population, write nothing
 
-Exit codes: 0 ok · 1 verify mismatch · 2 usage/no transcript store
+Exit codes: 0 ok · 1 verify mismatch · 2 usage/no transcript store/home folder
 """
 from __future__ import annotations
 
 import argparse
 import datetime
 import hashlib
+import importlib.util
 import json
 import os
 import re
 import subprocess
 import sys
 from pathlib import Path
+
+# shared project paths: the transcript-folder slug (one definition with
+# export-session.py and the pre-compact hook)
+_pa_spec = importlib.util.spec_from_file_location(
+    "_paths", Path(__file__).resolve().parent / "_paths.py")
+_pa = importlib.util.module_from_spec(_pa_spec)
+_pa_spec.loader.exec_module(_pa)
 
 SCHEMA = 1
 # A session id becomes a directory name and an index key. A file literally
@@ -83,27 +104,15 @@ def project_slug(cwd: Path) -> str:
     """Claude Code's transcript-directory name for a cwd: every character
     outside [A-Za-z0-9] becomes "-" (measured over 72 directories, 2026-09-15;
     `_` and `.` included). Replacing only "/" missed any path holding either
-    and reported "no transcript store" for a store that existed."""
-    return re.sub(r"[^A-Za-z0-9]", "-", str(cwd))
+    and reported "no transcript store" for a store that existed. The rule lives
+    in scripts/_paths.py, shared with export-session.py and the hook."""
+    return _pa.project_slug(cwd)
 
 
-def belongs_to_project(transcript: Path, root_real: str) -> bool:
-    """True unless the transcript demonstrably belongs to a DIFFERENT project.
-
-    Slugs replace "/" with "-", so /a/b-c and /a-b/c collide, and without a
-    check project A's sessions landed in project B's committed index. But the
-    first version of this check demanded an exact match against three strings,
-    and real transcripts do not honour that: sampled across 117 real
-    cwd-bearing transcripts, 4 record several cwds (a project and its
-    subdirectories) and 18 record a cwd that never re-slugs to their own store.
-    Those were silently dropped from the population — the precise gap this
-    index exists to close (review 2026-09-02).
-
-    So: accept the project root or ANY DESCENDANT of it, consider every cwd
-    record rather than the first, and accept when no cwd is recorded at all.
-    Only an unambiguous mismatch — every observed cwd outside the project —
-    excludes a session.
-    """
+def cwd_verdict(transcript: Path, root_real: str):
+    """True when a recorded cwd lies inside the project (the root or any
+    descendant), False when every recorded cwd lies outside it, None when the
+    transcript records no cwd or cannot be read (nothing places it)."""
     seen_any = False
     try:
         with transcript.open("r", encoding="utf-8", errors="replace") as f:
@@ -127,35 +136,83 @@ def belongs_to_project(transcript: Path, root_real: str) -> bool:
                 if real == root_real or real.startswith(root_real.rstrip(os.sep) + os.sep):
                     return True
     except OSError:
-        return True
-    return not seen_any
+        return None
+    return False if seen_any else None
 
 
-def store_for(root: Path) -> Path | None:
-    """Locate Claude Code's transcript directory for this project.
+def belongs_to_project(verdict, require_cwd: bool = False) -> bool:
+    """True unless the transcript demonstrably belongs to a DIFFERENT project;
+    `verdict` is cwd_verdict()'s answer for it.
+
+    Slugs replace "/" with "-", so /a/b-c and /a-b/c collide, and without a
+    check project A's sessions landed in project B's committed index. But the
+    first version of this check demanded an exact match against three strings,
+    and real transcripts do not honour that: sampled across 117 real
+    cwd-bearing transcripts, 4 record several cwds (a project and its
+    subdirectories) and 18 record a cwd that never re-slugs to their own store.
+    Those were silently dropped from the population — the precise gap this
+    index exists to close (review 2026-09-02).
+
+    So: accept the project root or ANY DESCENDANT of it, consider every cwd
+    record rather than the first, and accept when no cwd is recorded at all.
+    Only an unambiguous mismatch — every observed cwd outside the project —
+    excludes a session.
+
+    `require_cwd` is for a store found by PREFIX (a subfolder's or a
+    worktree's, 4.3.0): its name alone does not place it in the project —
+    /a/b-c slugs to the same prefix as /a/b/c — so there a session counts
+    only on a recorded cwd inside the project, never on the absence of one.
+    """
+    return (not require_cwd) if verdict is None else verdict
+
+
+def stores_for(root: Path) -> list[tuple[Path, bool]]:
+    """Every Claude Code transcript directory that can hold this project's
+    sessions, as (directory, exact) pairs: the exact folder first, then the
+    folders whose name starts with the exact slug plus "-", sorted.
+
+    Claude Code keys the store by the folder a session STARTED in, so a session
+    started in a subfolder (<slug>-src) or in a worktree (<slug>--claude-
+    worktrees-x) lands in a folder of its own; returning the exact folder only
+    left those sessions out of the population, and coverage inherited the gap
+    (4.3.0: seven worktree folders sat beside one real project). A prefix
+    folder can also belong to a look-alike sibling (/a/b-c beside /a/b); the
+    caller keeps only sessions whose recorded cwd lies inside the project
+    (belongs_to_project with require_cwd).
 
     Tries the path as given AND its physical resolution: the slug is built from
     whatever string the tool was launched with, and on macOS `resolve()` turns
     /var into /private/var (and any symlinked home or worktree likewise), which
-    silently points at a store that does not exist. Returns None when neither
+    silently points at a store that does not exist. Returns [] when no
     candidate is present, so the caller can say so rather than index nothing.
     """
-    seen = []
+    exact: list[Path] = []
+    prefixed: list[Path] = []
+    slugs: list[str] = []
     for cand in (root, Path(os.path.abspath(root)), root.resolve()):
         slug = project_slug(cand)
         # A relative path slugs to something degenerate — "." slugs to ".", and
         # PROJECTS_ROOT / "." IS PROJECTS_ROOT, which exists. That returned the
         # projects root itself, globbed zero sessions, and marked every live
         # session pruned (caught on the maintainer's own repo, 2026-09-02).
-        if not slug or set(slug) <= {".", "-"}:
+        if not slug or set(slug) <= {".", "-"} or slug in slugs:
             continue
+        slugs.append(slug)
         d = PROJECTS_ROOT / slug
-        if d in seen:
-            continue
-        seen.append(d)
-        if d.is_dir() and d.resolve() != PROJECTS_ROOT.resolve():
-            return d
-    return None
+        if d.is_dir() and d.resolve() != PROJECTS_ROOT.resolve() and d not in exact:
+            exact.append(d)
+    if slugs:
+        try:
+            names = sorted(e.name for e in os.scandir(PROJECTS_ROOT) if e.is_dir())
+        except OSError:
+            names = []
+        for name in names:
+            d = PROJECTS_ROOT / name
+            if d in exact or d in prefixed:
+                continue
+            if any(name.startswith(sl + "-") for sl in slugs):
+                prefixed.append(d)
+    return [(d, True) for d in exact] + [(d, False) for d in prefixed]
 
 
 def git(args: list[str], cwd: Path) -> str:
@@ -471,13 +528,27 @@ def main() -> int:
                     help="print the population; write nothing")
     args = ap.parse_args()
 
-    # store_for must see the path AS GIVEN: resolving first collapsed all three
+    # stores_for must see the path AS GIVEN: resolving first collapsed all three
     # candidates to the physical slug, so the symlink handling was dead code and
     # a symlinked checkout indexed nothing (review 2026-09-02).
     root_given = Path(args.root)
     root = root_given.resolve()
+    # The home folder is no project root: every transcript folder below it
+    # starts with its slug, so the prefix-store sweep would index every
+    # session on the machine into ~/perdure/raw (4.3.0; the pre-compact hook
+    # skips home the same way).
+    try:
+        is_home = os.path.realpath(str(root_given)) == os.path.realpath(str(Path.home()))
+    except (OSError, RuntimeError):
+        is_home = False
+    if is_home:
+        print(f"raw-index.py: refusing --root {root}: it is the home folder, and every "
+              f"project's sessions would join its population (each project's "
+              f"transcript folder starts with the home folder's name). Run it at a "
+              f"project root.", file=sys.stderr)
+        return 2
     index_path = root / INDEX_REL
-    store = store_for(root_given)
+    stores = stores_for(root_given)
 
     existing, rejects = read_index(index_path)
 
@@ -486,7 +557,7 @@ def main() -> int:
         return 2
 
     if args.summary:
-        if store is None:
+        if not stores:
             print(f"no transcript store for this project under {PROJECTS_ROOT} — "
                   f"the population is UNKNOWN, not zero", file=sys.stderr)
             return 2
@@ -506,7 +577,7 @@ def main() -> int:
                       f"{max(e.get('last_ts','') for e in existing.values())[:10]}")
         return 0
 
-    if store is None:
+    if not stores:
         print(f"no transcript store for this project under {PROJECTS_ROOT} "
               f"(looked for slug {project_slug(root.resolve())!r})", file=sys.stderr)
         return 2
@@ -517,16 +588,43 @@ def main() -> int:
     seen: dict[str, dict] = {}
     skipped: list[str] = []
     on_disk: set[str] = set()          # every session file present, examined or not
+    no_cwd = 0                         # prefix-store sessions that record no cwd
     root_real = os.path.realpath(root)
-    for transcript in sorted(store.glob("*.jsonl")):
+    # Every store, exact folder first: on_disk, pruning and --verify span all
+    # of them, and INDEX.jsonl still carries no folder name. A transcript in a
+    # PREFIX store counts as on disk only once it is known to be this
+    # project's (its cwd lies inside it, or the index already holds it); a
+    # look-alike sibling's sessions are not this project's and are not
+    # reported as skipped.
+    transcripts = [(t, exact) for st, exact in stores for t in sorted(st.glob("*.jsonl"))]
+    for transcript, exact in transcripts:
         sid = transcript.stem
-        on_disk.add(sid)
+        if exact or sid in existing:
+            on_disk.add(sid)
         if not _SESSION_OK.match(sid):
-            skipped.append(f"{sid!r}: not a valid session id")
+            if exact:
+                skipped.append(f"{sid!r}: not a valid session id")
             continue
-        if not belongs_to_project(transcript, root_real):
-            skipped.append(f"{sid}: every recorded cwd lies outside this project")
+        if sid in seen:
+            # the same id in two folders: the first (exact folder first, then
+            # by name) is indexed, so the choice is stable across runs
+            skipped.append(f"{sid}: also present in another transcript folder; "
+                           f"the first one found is indexed")
             continue
+        verdict = cwd_verdict(transcript, root_real)
+        if not belongs_to_project(verdict, require_cwd=not exact):
+            if exact:
+                skipped.append(f"{sid}: every recorded cwd lies outside this project")
+            elif sid in existing:
+                # indexed before, unconfirmable now (unreadable, say): skipped,
+                # and never pruned — it is still on disk
+                skipped.append(f"{sid}: no recorded cwd inside this project could be read")
+            elif verdict is None:
+                # a prefix folder's session with no cwd: maybe this project's,
+                # maybe a look-alike's — left out, and counted (ADR-008)
+                no_cwd += 1
+            continue
+        on_disk.add(sid)
         prev = existing.get(sid)
         try:
             st = transcript.stat()
@@ -534,7 +632,7 @@ def main() -> int:
             skipped.append(f"{sid}: {type(exc).__name__}")
             continue
         # cheap skip: unchanged size+mtime means the digest cannot have changed
-        sdir = store / sid
+        sdir = transcript.parent / sid
         try:
             dir_mtime = int(sdir.stat().st_mtime) if sdir.is_dir() else 0
         except OSError:
@@ -566,6 +664,12 @@ def main() -> int:
         if prev and prev.get("pruned_detected_at"):
             e["last_absent_at"] = prev["pruned_detected_at"]
         seen[sid] = e
+
+    if no_cwd:
+        print(f"note: {no_cwd} session(s) in transcript folders named like this "
+              f"project's subfolders or worktrees were not indexed: they record no "
+              f"working folder (cwd) that could be read, so nothing shows they ran "
+              f"inside this project", file=sys.stderr)
 
     if args.verify:
         problems = []

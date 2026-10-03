@@ -18,7 +18,9 @@ What it does, in order (each step gates the next):
      by hand can be completed after the fact (4.1.0)
   3. refuses if `# Review` is empty — append a verdict or a recorded skip
      first (the gate checks the record, not the producer); --skip-review
-     "<reason>" writes the convention's recorded skip and proceeds (4.1.0)
+     "<reason>" writes the convention's recorded skip and proceeds (4.1.0);
+     without it, --abandon "<why>" writes the abandon reason as that skip,
+     so a dropped plan closes on one reason (4.3.0)
   4. runs the rot lint; refuses on findings unless --force-lint
   5. sets `status: completed` (or `abandoned` with --abandon), bumps
      `updated:`, and appends --outcome text under `# Outcome` when given
@@ -292,11 +294,19 @@ def main() -> int:
     # review gate: # Review must carry content beyond the scaffold placeholder
     review = [l for l in section_body(lines, "Review")
               if l.strip() and not l.strip().startswith("(empty until")]
-    if not review and args.skip_review:
+    # The recorded skip's reason: --skip-review's, else, for an abandoned record,
+    # the abandon reason. A dropped plan has nothing to review, and asking for a
+    # second reason made the closer refuse it (4.3.0, re-review). A completed
+    # close still needs a verdict or --skip-review.
+    skip = None
+    if args.skip_review:
+        skip = (args.skip_review.strip(), "--skip-review")
+    elif args.abandon is not None:
+        skip = (f"abandon reason: {args.abandon.strip()}", "--abandon")
+    if not review and skip:
         # the convention's conscious skip, written where a verdict would go, so an
         # autonomous run with no reviewer closes on a recorded skip instead of stalling
-        skip_line = (f"Review: skipped — {args.skip_review.strip()} "
-                     f"({today}; recorded by close-workflow.py --skip-review)")
+        skip_line = f"Review: skipped — {skip[0]} ({today}; recorded by close-workflow.py {skip[1]})"
         lines = insert_skip(lines, skip_line)
         review = [skip_line]
         # write the recorded skip BEFORE the lint runs: the lint reads the file on
@@ -304,12 +314,13 @@ def main() -> int:
         # text (review 2026-09-18). The status is still open at this point.
         record.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
         lines = record.read_text(encoding="utf-8", errors="replace").lstrip("\ufeff").splitlines()
-        print(f"review: recorded skip — {args.skip_review.strip()}", file=sys.stderr)
+        print(f"review: recorded skip — {skip[0]}", file=sys.stderr)
     elif review and args.skip_review:
         print("note: # Review already carries content; --skip-review ignored", file=sys.stderr)
     if not review:
         print("review gate REFUSED: `# Review` is empty — append a verdict block "
-              "or a recorded skip (with reason) before closing. "
+              "or a recorded skip (with reason) before closing: --skip-review "
+              "\"<reason>\" records one, and an --abandon \"<why>\" reason stands as one. "
               "The gate checks the record, not the producer.", file=sys.stderr)
         return 4
 

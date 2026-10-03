@@ -12,14 +12,16 @@ its records under `perdure/`.
 <!-- perdure-records:begin -->
 ## Records
 
-This repository keeps a decision trail under `perdure/`. It is committed, and
-it is checked. Any tool that can read a repo can read it, and any tool that can
-run `python3` can run the verification.
+This project keeps a decision trail under `perdure/`. It is kept with the
+project (committed, when the project is a repository), and it is checked. Any
+tool that can read the project's files can read it, and any tool that can run
+`python3` can run the verification.
 
-Three rules, then the detail:
+Four rules, then the detail:
 
-- One record per unit of multi-step work, under `perdure/workflows/`, with
-  its plan and decisions written before the first edit.
+- Any task that changes files or decides something keeps one record under
+  perdure/workflows/, opened before the first edit or as soon as planning or a
+  review reaches a decision; the work that follows continues in the same record.
 - A record closes only with a review verdict, or a recorded reason for skipping one.
 - `perdure/HANDOFF.md` is generated from the records, never edited by hand.
 - A record is closed by `close-workflow.py` (the `close` skill runs it), never by
@@ -34,12 +36,15 @@ which records are flagged as unreliable. A record listed under *Needs
 reconciliation* contradicts itself somewhere, so do not build on it without
 reading it first.
 
+When you pick a task back up from its record, say so first, in one line:
+`Resumed from perdure: <task>, next: <next step>`.
+
 ### With the perdure skills installed
 
 Any tool that carries the plugin's skills has one for each stage. Use it rather
 than working by hand:
 
-- Starting multi-step work → `start`
+- Starting a task → `start`
 - Picking work back up → `continue`
 - Finished, before declaring done → `verdict`, then `close`
 - Asking where things stand → `handoff`
@@ -48,9 +53,14 @@ than working by hand:
 Under Claude Code these are `/perdure:<name>`. Without the skills, the sections
 below are the same contract, followed by hand.
 
-### When you finish substantive work
+### Writing a record
 
-Add or update a record at `perdure/workflows/YYYY-MM-DD-slug.md`:
+When a record opens, say so in one passing line; never ask whether to keep
+one. A dispatched agent works under the record of the session that dispatched
+it and opens none.
+
+Open the record at `perdure/workflows/YYYY-MM-DD-slug.md` with its plan and
+decisions written, and keep it current at each checkpoint:
 
 ```markdown
 ---
@@ -71,7 +81,7 @@ updated: 2026-01-01T09:00:00-07:00
 # Outcome
 ```
 
-Two fields carry weight beyond documentation:
+Three fields carry weight beyond documentation:
 
 - **`status`** must be one of `in-progress`, `parked`, `completed`, `abandoned`.
   Two checks key on this vocabulary and skip a record whose status they cannot
@@ -81,9 +91,10 @@ Two fields carry weight beyond documentation:
 - A decision under **`# Decisions`** that changes a decision recorded in an
   earlier record names that record on its line and says why.
 
-Skip the record for a typo fix, an obvious one-line edit, or a conversational
-exchange. Write one when a decision was made, an approach was rejected, or
-someone will need to know why later.
+A plan that is dropped is closed as abandoned, with one line on why.
+
+Skip the record only when the whole task is one line in one file (a typo, a
+one-line fix), or a question or brainstorm that decides nothing.
 
 Write it anyway when you notice yourself thinking:
 
@@ -98,6 +109,8 @@ Write it anyway when you notice yourself thinking:
 
 - Hand-edit `perdure/HANDOFF.md`. It is regenerated, and a hand edit is
   detected rather than merged.
+- Resolve a merge conflict in `perdure/HANDOFF.md` by hand. Regenerate it from
+  the merged records (`handoff.py .`) and commit the result.
 - Re-quote a claim a record has retracted. Paraphrase it instead, so the
   retracted wording does not read as current.
 - Mark a record terminal to tidy it up. `parked` and `abandoned` exist.
@@ -110,7 +123,7 @@ non-zero on a real problem, so they run in CI or a pre-commit hook regardless of
 which tool did the work:
 
 ```
-rot-lint.py --strict .      # a record contradicts itself
+rot-lint.py --strict .      # a record contradicts itself, or two decisions share a number
 handoff.py . --check        # the generated page no longer matches its sources
 close-workflow.py <slug>    # refuses a close with no review verdict (--skip-review "<reason>" records a conscious skip)
 ```

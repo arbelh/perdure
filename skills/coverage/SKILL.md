@@ -32,17 +32,19 @@ descending strength of evidence:
 
 ## How to report it
 
-1. **Never call an unexplained session a violation.** The convention says not to
-   open records for typo fixes, obvious edits, or interactive back-and-forth, so
-   most sessions in a healthy project legitimately have no record. This tool
-   cannot know which; that judgement is the reader's.
+1. **Never call an unexplained session a violation.** The convention's rule:
+   "Skip the record only when the whole task is one line in one file (a typo,
+   a one-line fix), or a question or brainstorm that decides nothing."
+   Many sessions in a healthy project are exactly that and legitimately have no
+   record. This tool cannot know which; that judgement is the reader's.
 2. **Say which numbers are checkable.** CITED is evidence. OVERLAPPING is a
    hint, and must be described as one.
-3. **Read records-without-sessions carefully.** The population is keyed by
-   working directory, but records describe a *repository*, and one session
-   routinely edits a repo other than its cwd. Work done from elsewhere is
-   invisible here. Coverage is a per-directory measure, not a per-repo one — say
-   so rather than implying records are missing.
+3. **Read records-without-sessions carefully.** The population is the
+   sessions started in the project's folder, a subfolder of it, or a worktree
+   under it. Records describe a *repository*, and one session routinely edits
+   a repo other than the one it started in. Work done from a session started
+   elsewhere is invisible here. Say so rather than implying records are
+   missing.
 4. **To make coverage checkable**, add the session id to a record's frontmatter:
    `sessions: <id>`. Until records cite sessions, only the heuristic is
    available and the honest answer is "not established".

@@ -12,10 +12,10 @@ context for the next session, the next agent, or you in three weeks.
 **How it works.** A plugin for Claude Code and Codex, a skill pack for Cursor
 and 70+ other agents. Install it, add its instructions to your `CLAUDE.md` or
 the project's `AGENTS.md` (`/perdure:install` writes them for you in Claude
-Code), and the agent keeps one markdown record per multi-step task in your
-repository as it works; a Python script checks the record when the task closes
-and generates a one-page handoff. No service, no account, nothing to keep
-running.
+Code), and the agent keeps one markdown record for each task that changes
+files or decides something, in your repository, as it works; a Python script
+checks the record when the task closes and generates a one-page handoff. No
+service, no account, nothing to keep running.
 
 The check is a linter for records: a closed record carries its review or a
 written reason for skipping one, a claim that nothing was committed is checked
@@ -137,8 +137,9 @@ closes it when the work is done, without being asked; enter installs the
 recommended setup, "adjust" walks the options. Skip it and you drive with
 `/perdure:start`.
 `/perdure:health` checks the setup. `/perdure:uninstall` removes the directive,
-the `AGENTS.md` marker block and the preferences file; `claude plugin uninstall
-perdure@perdure` removes the plugin.
+the `AGENTS.md` marker blocks (the project's, and Codex's `~/.codex/AGENTS.md`)
+and the preferences file; `claude plugin uninstall perdure@perdure` removes the
+plugin.
 Later, `claude plugin marketplace update perdure` then
 `claude plugin update perdure@perdure` moves you to the newest release.
 
@@ -215,7 +216,7 @@ agent can read, with its scripts beside it.
 
 | Skill | What it does | Use when |
 |---|---|---|
-| [start](skills/start/SKILL.md) | Opens one record for the task, with the sections the convention names | You begin a task that will outlast one session |
+| [start](skills/start/SKILL.md) | Opens one record for the task, with the sections the convention names | You begin a task that changes files or decides something |
 | [continue](skills/continue/SKILL.md) | Resumes from the record, in any session, with any model | A new session opens, or a different model picks the task up |
 | [close](skills/close/SKILL.md) | Lints, checks the verdict, sets the status, writes the HANDOFF page | The work is done and reviewed |
 | [list](skills/list/SKILL.md) | Every record and its status, at a glance | Before you start anything, to see what is open |
@@ -329,7 +330,7 @@ is in [docs/THREE-LAYERS.md](docs/THREE-LAYERS.md).
 | Piece | What it is |
 |---|---|
 | **The convention** | [docs/RECORDS-CONVENTION.md](docs/RECORDS-CONVENTION.md): one record per task under `perdure/`, decision records, a review-verdict schema. Plain markdown; any agent can follow it. |
-| **The lint** | `scripts/rot-lint.py`: five deterministic checks and a coverage table for every run. The skills run it at every close; `--strict` for CI. |
+| **The lint** | `scripts/rot-lint.py`: deterministic checks on each record and on decision ids, and a coverage table for every run. The skills run it at every close; `--strict` for CI. |
 | **The close gate** | a hook that lints a record as it closes and keeps the HANDOFF page current. |
 | **The review gate** | `/perdure:verdict` appends an independent verdict; closing requires one. |
 | **The HANDOFF page** | `perdure/HANDOFF.md`, built from the records: what is in force, what is open, each claim with its source. Created at the first close, kept current by the close gate; `/perdure:handoff --check` confirms it. |
@@ -345,10 +346,11 @@ is in [docs/THREE-LAYERS.md](docs/THREE-LAYERS.md).
 .codex-plugin/     plugin.json                      — Codex CLI
 .agents/plugins/   marketplace.json                 — Codex CLI
 skills/            the fourteen skills — what any agent reads
-scripts/           rot-lint · handoff · close-workflow · new-workflow · coverage · raw-index · export-session
+scripts/           rot-lint · handoff · close-workflow · new-workflow · next-adr-id · coverage · raw-index · export-session
 hooks/             close gate · pre-compact archive
 docs/              RECORDS-CONVENTION.md · THREE-LAYERS.md
 templates/         AGENTS.md — the instructions your project receives
+                   AGENTS.user.md — the same rule for Codex, in ~/.codex/AGENTS.md
 ```
 
 </details>

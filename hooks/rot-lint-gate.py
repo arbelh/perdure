@@ -27,8 +27,10 @@ only), but acts ONLY when all three gates open:
 
 HANDOFF regeneration (v3.4.0): after a terminal-status record edit, if the
 project keeps a perdure/HANDOFF.md AND that page carries the generator's
-commit stamp AND it no longer matches the records (`handoff.py --check`
-exits 1), the hook regenerates it host-side. This closes the gap the
+stamp (the 4.2.0 commit stamp or the 4.3.0 records stamp; a page holding
+merge-conflict markers qualifies when each side does) AND it no longer
+matches the records (`handoff.py --check` exits 1, which a conflicted page
+always does), the hook regenerates it host-side. This closes the gap the
 2026-08-31 regression wave confirmed in every session: sandboxed headless
 children cannot reach the plugin's scripts, so a close performed inside the
 sandbox left the derived page stale with no way to refresh it — while this
@@ -67,10 +69,38 @@ PREF_KEY = "rot-lint-at-close"
 PREF_REGEN_KEY = "handoff-regen-at-close"
 MAX_LINT_CHARS = 3000
 # the generator's stamp — proof a HANDOFF page is generator-produced and
-# therefore safe to regenerate over (mirrors scripts/handoff.py's format)
+# therefore safe to regenerate over (mirrors scripts/handoff.py's format).
+# Both shapes: 4.2.0 and earlier stamped the commit and the minute; 4.3.0
+# stamps the newest `updated:` among the records, so the page depends on the
+# records only. A page still in the old shape must keep regenerating.
 STAMP_RE = re.compile(
-    r"^>\s*Derived orientation page, generated at commit "
-    r"`(?:[0-9a-f]{7,40}|no-git)` on \S+", re.M)
+    r"^>\s*Derived orientation page, generated (?:at commit "
+    r"`(?:[0-9a-f]{7,40}|no-git)` on \S+|by perdure `scripts/handoff\.py` "
+    r"from the records as of their newest `updated:` value, `[^`\n]+`)", re.M)
+# git's conflict markers, at column 0. A page two branches each regenerated
+# and then merged holds them; its sides are read separately (conflict_sides).
+CONFLICT_OPEN = re.compile(r"<{7}(?: |$)")
+CONFLICT_BASE = re.compile(r"\|{7}(?: |$)")
+CONFLICT_SEP = re.compile(r"={7}$")
+CONFLICT_CLOSE = re.compile(r">{7}(?: |$)")
+
+
+def load_shared(name: str):
+    """Import a shared module from the plugin's scripts/ (`_status_vocab`,
+    `_paths`), CLAUDE_PLUGIN_ROOT first, then this file's plugin root. Returns
+    None when unlocatable; the caller fails open."""
+    import importlib.util
+    for base in (os.environ.get("CLAUDE_PLUGIN_ROOT"),
+                 Path(__file__).resolve().parent.parent):
+        if not base:
+            continue
+        cand = Path(base) / "scripts" / f"{name}.py"
+        if cand.exists():
+            spec = importlib.util.spec_from_file_location(name, cand)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
+    return None
 
 
 def load_vocab():
@@ -82,22 +112,27 @@ def load_vocab():
     they were unified (v3.3.0). Returns None when unlocatable; the caller
     fails open.
     """
-    import importlib.util
-    for base in (os.environ.get("CLAUDE_PLUGIN_ROOT"),
-                 Path(__file__).resolve().parent.parent):
-        if not base:
-            continue
-        cand = Path(base) / "scripts" / "_status_vocab.py"
-        if cand.exists():
-            spec = importlib.util.spec_from_file_location("_status_vocab", cand)
-            mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)
-            return mod
-    return None
+    return load_shared("_status_vocab")
+
+
+def script_cmd(name: str) -> str:
+    """`python3 "<absolute path>"` for one of the plugin's scripts, for a message
+    a model runs. "${CLAUDE_PLUGIN_ROOT}" is set by Claude Code only, so in a
+    terminal or CI the printed command ran /scripts/<name> (4.3.0). The hook
+    knows its own location: CLAUDE_PLUGIN_ROOT's copy when it exists, else the
+    one beside this hook's plugin root."""
+    try:
+        base = os.environ.get("CLAUDE_PLUGIN_ROOT")
+        if not (base and (Path(base) / "scripts" / name).exists()):
+            base = str(Path(__file__).resolve().parent.parent)
+        return f'python3 "{Path(base) / "scripts" / name}"'
+    except Exception:  # a message must never break the hook
+        return f'python3 "scripts/{name}"'
+
 
 HANDOFF_NOTE = (
     "[perdure] perdure/HANDOFF.md is a DERIVED page — never hand-edit it. "
-    "Regenerate with `python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/handoff.py\" .` "
+    f"Regenerate with `{script_cmd('handoff.py')} .` "
     "(or /perdure:handoff). Hand-written content will be overwritten by the "
     "next regeneration and fails `--check` (the check regenerates the page "
     "and compares — hand edits never survive it)."
@@ -125,7 +160,7 @@ SCOPE_NOTE_CUT = (
     "short dated note; paraphrase retracted claims, never re-quote them "
     "(docs/RECORDS-CONVENTION.md, 'Correcting a record'). The lint output "
     f"above was cut at {MAX_LINT_CHARS} characters and its coverage table and "
-    "verdict did not fit — run `python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/rot-lint.py\" "
+    f"verdict did not fit — run `{script_cmd('rot-lint.py')} "
     "<record>` for the full report (every check the lint can run and, per check, "
     "whether it ran on this record and why not). A pass with no findings does "
     "not prove the record is true: no check looks for a contradiction in prose. "
@@ -275,7 +310,7 @@ def hand_close_note(event: dict, record: Path, sv) -> str:
         f"closer. `close-workflow.py` writes from Python, so this close skipped it: the "
         f"canonical status and `updated:` stamp, the recorded skip or Outcome line, and "
         f"creating the HANDOFF page when the project has none. Run "
-        f"`python3 \"${{CLAUDE_PLUGIN_ROOT}}/scripts/close-workflow.py\" {slug}` now: on an "
+        f"`{script_cmd('close-workflow.py')} {slug}` now: on an "
         f"already-terminal record it verifies (lint, # Review present) and creates or "
         f"refreshes the page. Next time run it instead of editing the status; "
         f"`--skip-review \"<reason>\"` records a conscious skip when there is no reviewer."
@@ -308,11 +343,58 @@ def project_root_of(record: Path) -> Path | None:
 
     OUTERMOST perdure/workflows segment, matching edited_record's parts scan
     — a pathological path containing the segment twice must resolve to the
-    same project both gates keyed on (review 2026-08-31)."""
-    for parent in reversed(record.parents):
-        if parent.name == "workflows" and parent.parent.name == "perdure":
-            return parent.parent.parent
-    return None
+    same project both gates keyed on (review 2026-08-31). The definition is
+    scripts/_paths.py's records_root_of, the one rot-lint.py and handoff.py
+    share (4.3.0); None when that module cannot be located (fail open)."""
+    pa = load_shared("_paths")
+    return pa.records_root_of(record) if pa is not None else None
+
+
+def conflict_sides(lines):
+    """(ours, theirs) when the lines hold git conflict markers, else None.
+
+    Each side is the page as one branch wrote it: the lines outside every
+    conflict plus that side's half of each one (a diff3 base section is
+    dropped). A page that two branches each regenerated, then merged, is two
+    generated pages — each must carry the stamp on its own for the page to be
+    regenerated rather than treated as hand-written (4.3.0)."""
+    ours, theirs, state, seen = [], [], None, False
+    for line in lines:
+        if state is None and CONFLICT_OPEN.match(line):
+            state, seen = "ours", True
+            continue
+        if state == "ours" and CONFLICT_BASE.match(line):
+            state = "base"
+            continue
+        if state in ("ours", "base") and CONFLICT_SEP.match(line):
+            state = "theirs"
+            continue
+        if state == "theirs" and CONFLICT_CLOSE.match(line):
+            state = None
+            continue
+        if state is None:
+            ours.append(line)
+            theirs.append(line)
+        elif state == "ours":
+            ours.append(line)
+        elif state == "theirs":
+            theirs.append(line)
+    return (ours, theirs) if seen else None
+
+
+def carries_stamp(lines) -> bool:
+    """True iff the page's fixed header holds the generator's stamp: line 1
+    `# HANDOFF — <name>`, then the stamp blockquote within the next four lines
+    (line 3 in the 4.2.0 shape, line 4 after the generated-file marker since
+    4.3.0). A page holding conflict markers qualifies only when EVERY side does;
+    a marker left inside a side is that side's content, so its header fails."""
+    for side in (conflict_sides(lines) or (lines,)):
+        head_lines = list(side[:5])
+        head = "\n".join(head_lines[1:]) if (
+            head_lines and head_lines[0].startswith("# HANDOFF")) else ""
+        if not STAMP_RE.search(head):
+            return False
+    return True
 
 
 def regenerate_handoff(record: Path) -> str:
@@ -345,24 +427,24 @@ def regenerate_handoff(record: Path) -> str:
             log("perdure/HANDOFF.md resolves outside perdure/; refusing")
             return ""
         # The generator's header is fixed: line 1 "# HANDOFF — <name>",
-        # line 2 blank, line 3 the stamp blockquote. Require that exact shape.
-        # A looser check let a hand-written page that merely QUOTED the stamp
-        # (in an HTML comment, or inside a code fence) qualify for silent
-        # replacement — defeating the rail whose whole job is never to
-        # overwrite typed content (pre-publish verification, 2026-08-31).
-        head_lines = page.read_text(
-            encoding="utf-8", errors="replace").lstrip("\ufeff").splitlines()[:5]
-        head = "\n".join(head_lines[1:]) if (
-            head_lines and head_lines[0].startswith("# HANDOFF")) else ""
+        # then the stamp blockquote at line 3 (4.2.0) or line 4 (4.3.0, after
+        # the generated-file marker). Require that shape. A looser check let a
+        # hand-written page that merely QUOTED the stamp (in an HTML comment,
+        # or inside a code fence) qualify for silent replacement — defeating
+        # the rail whose whole job is never to overwrite typed content
+        # (pre-publish verification, 2026-08-31). A page holding conflict
+        # markers is read side by side (carries_stamp).
+        page_lines = page.read_text(
+            encoding="utf-8", errors="replace").lstrip("\ufeff").splitlines()
     except OSError:
         return ""
-    if not STAMP_RE.search(head):
+    if not carries_stamp(page_lines):
         return (
             "perdure/HANDOFF.md exists but carries no generator stamp — it "
             "looks hand-written. The derived page is regenerate-only and was "
             "NOT auto-replaced (the close gate never silently overwrites "
             "typed content). Regenerate it deliberately: "
-            "`python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/handoff.py\" .` "
+            f"`{script_cmd('handoff.py')} .` "
             "(or /perdure:handoff)."
         )
     handoff = locate_script("handoff.py")
@@ -477,7 +559,7 @@ def _run() -> int:
             f"{token[:40].replace('PERDURE-LINT-OUTPUT', 'PERDURE-LINT-0UTPUT')}`, which is "
             f"OUTSIDE the convention's vocabulary (in-progress | parked | completed "
             f"| abandoned) — the close has not fully registered. Run "
-            f"`python3 \"${{CLAUDE_PLUGIN_ROOT}}/scripts/close-workflow.py\" <slug>`: it sets the canonical terminal status "
+            f"`{script_cmd('close-workflow.py')} <slug>`: it sets the canonical terminal status "
             f"and does the whole close deterministically (review-gate check, lint, "
             f"stamp, HANDOFF). Do not edit the status by hand."
         )

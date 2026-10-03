@@ -9,10 +9,11 @@ produced four records for five units of work and could not tell.
 
 WHAT THIS DOES NOT DO, deliberately: it does not decide whether a session
 *should* have produced a record, and it never calls an unlinked session a
-violation. The convention says plainly not to open records for typo fixes,
-obvious edits, or interactive back-and-forth, so most sessions in a healthy
-project legitimately have none. Asserting otherwise would be the exact
-overclaim this project exists to prevent. It reports what it can check, separates what it could not check from what it
+violation. The convention's rule:
+Skip the record only when the whole task is one line in one file (a typo, a one-line fix), or a question or brainstorm that decides nothing.
+Many sessions are exactly that, and this tool cannot tell which, so calling an
+unlinked session a violation would be the exact overclaim this project exists
+to prevent. It reports what it can check, separates what it could not check from what it
 checked and found nothing for, and treats the remainder as a question for a
 human rather than a verdict.
 
@@ -31,11 +32,14 @@ Four buckets, in descending strength of evidence:
                UNEXPLAINED, because "I could not check" is not "I found nothing".
 
 A KNOWN STRUCTURAL LIMIT, stated because it changes how the numbers read: the
-population is keyed by working directory, because that is how the transcript
-store is keyed — but records describe a REPOSITORY, and one session routinely
-edits a repo other than its cwd. Work done from elsewhere is invisible here and
-is reported as records-without-sessions rather than guessed at. Coverage is a
-per-directory measure; do not read it as a per-repo one.
+population is the sessions that STARTED inside this project's folder — its
+root, a subfolder, or a worktree under it — because the transcript store files
+each session under the folder it started in, and raw-index.py reads exactly
+those folders. Records describe a REPOSITORY, and one session routinely edits
+a repo other than the one it started in. Work done from a session started
+elsewhere is invisible here and is reported as records-without-sessions rather
+than guessed at. Coverage measures the sessions started in this folder; do not
+read it as a per-repo measure.
 
 Usage:
   coverage.py [--root DIR]                    report coverage
@@ -292,10 +296,13 @@ def main() -> int:
             "notes": [
                 "cited = a record names the session id in frontmatter; checkable",
                 "weak = body mention or time overlap; correlation, not evidence",
-                "unexplained is NOT an error: the convention says not to record "
-                "typo fixes, obvious edits or back-and-forth",
-                "coverage is keyed by working directory, not by repository: "
-                "work done from another directory is invisible here",
+                "unexplained is NOT an error: the convention skips the record "
+                "when the whole task is one line in one file, or a question "
+                "or brainstorm that decides nothing",
+                "coverage counts the sessions started inside this project's "
+                "folder (its root, a subfolder or a worktree under it), not every "
+                "session that touched the repository: work done from a session "
+                "started elsewhere is invisible here",
             ],
         }, indent=2, sort_keys=True))
     else:
@@ -315,8 +322,9 @@ def main() -> int:
         if r["unexplained"]:
             print()
             print("Unexplained sessions — a question, not a verdict. The "
-                  "convention says not to open records for typo fixes, obvious "
-                  "edits or back-and-forth, so many of these need none:")
+                  "convention skips the record when the whole task is one line "
+                  "in one file, or a question or brainstorm that decides nothing, "
+                  "so many of these need none:")
             for s in sorted(r["unexplained"], key=lambda x: x.get("first_ts") or ""):
                 pr = prompts_of(s)
                 st = "" if s.get("status") == "present" else f" [{s.get('status')}]"
@@ -333,11 +341,13 @@ def main() -> int:
             print()
             print(f"{len(r['orphan_records'])} record(s) with no session in "
                   f"this population. Most likely causes, in order:")
-            print("  1. The work was done from a DIFFERENT working directory. "
-                  "The population is per-project-directory (that is how the "
-                  "transcript store is keyed), but records describe a repo — "
-                  "and one session often edits another repo. Those sessions are "
-                  "in that directory's population, not this one.")
+            print("  1. The work was done from a session started OUTSIDE this "
+                  "project's folder. The population holds the sessions started "
+                  "in the project root, a subfolder or a worktree under it (the "
+                  "transcript store files each session under the folder it "
+                  "started in), but records describe a repo — and one session "
+                  "often edits another repo. Those sessions are in that "
+                  "folder's population, not this one.")
             print("  2. The record predates the index, or its session has been "
                   "pruned and was never swept while present.")
             print("  3. The record was written by hand.")

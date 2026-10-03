@@ -3,8 +3,8 @@ name: continue
 description: Resume a previously started perdure workflow. Reads the workflow's
   persistent state file, re-injects its plan, findings, decisions, and current step
   into the conversation so the session can continue where it left off — even
-  after compaction, /clear, or a new session. Use when coming back to a multi-step
-  task that was paused.
+  after compaction, /clear, or a new session. Use when coming back to a task
+  that was paused.
 disable-model-invocation: true
 argument-hint: "[slug]"
 ---
@@ -20,6 +20,19 @@ You are restoring a workflow's state so work can continue.
 - If no argument, scan `perdure/workflows/*.md` for active workflows and ask which to resume.
 
 ## Steps
+
+### 0. Check the HANDOFF page
+- If `perdure/HANDOFF.md` holds merge-conflict markers (a line starting with
+  `<<<<<<< `, then `=======` or `>>>>>>> `), read each side on its own: the
+  lines outside the conflicts plus that side's half of each one.
+- Regenerate the page only when every side carries the generator's stamp, as
+  the close-gate hook does: the side starts with `# HANDOFF`, and one of its
+  next four lines starts with `> Derived orientation page, generated`. Say so
+  in one line: the page is derived, so a conflict is never resolved by hand.
+  `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff.py" .`
+  (step 3b says where the scripts are without `${CLAUDE_PLUGIN_ROOT}`)
+- When a side lacks the stamp, someone wrote it by hand. Leave the page as it
+  is, say so in one line, and go on with the resume. Do not ask.
 
 ### 1. Locate the workflow file
 - If `$1` provided: find `perdure/workflows/*<$1>*.md` that matches (also check `<YYYY>/` subdirectories for aged terminal files)
@@ -47,9 +60,13 @@ You are restoring a workflow's state so work can continue.
   or in `scripts/` beside this SKILL.md in a skills-CLI install.)
 
 ### 4. Re-inject state into conversation
-Present to the user and load into context:
+Present to the user and load into context. The first line is always the
+resume line: the task in a few words (the slug, or the goal shortened) and
+the record's `# Next step`:
 
 ```
+Resumed from perdure: <task>, next: <next step>
+
 ## Resuming workflow: <slug>
 
 **Goal**: <goal>
@@ -88,7 +105,8 @@ Ready to continue? I'll pick up from "<next step>".
   recorded skip) covering the post-reopen work, per docs/RECORDS-CONVENTION.md.
   (Terminal files are normally immutable — prefer a new file, adding a
   `continued-by:` link to the old one per the convention; reopen only when the
-  user explicitly chooses it)
+  user explicitly chooses it. The convention's other exception is a decision
+  renumbering, in the decide skill's step 5.)
 
 ### 6. Continue the work
 After resumption, continue from `# Next step` however this session works —
@@ -99,8 +117,9 @@ done (`/perdure:verdict`, then `/perdure:close`).
 ## Safety rules
 
 - **Never modify** content of Findings, Decisions, Files modified sections — those
-  are historical record (the close pass's append-only promotion annotations are
-  the one exception)
+  are historical record. Two exceptions: the close pass's append-only promotion
+  annotations, and a decision renumbering after two branches took one number
+  (the decide skill's step 5)
 - **Always show** the user what's being restored before injecting into context
 - **Respect completed/abandoned status** — reopening requires explicit user confirmation
 - **Graceful missing file**: if no workflow matches, say so clearly and suggest

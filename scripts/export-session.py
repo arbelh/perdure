@@ -16,19 +16,31 @@ Formats:
     verbose  — prose + tool summaries + truncated outputs
 
 Output path default: <project-root>/perdure/archives/session-<YYYY-MM-DD>-<slug>-<short-uuid>.md
+    — or the archive already written for that session id, rewritten in place:
+    one file per session, whatever its name says. An archive is that session's
+    only when its **Session ID:** header names the same FULL id; another
+    session's archive that shares the short id is kept, and the new one gets
+    a numbered name (session-<date>-<slug>-2-<short-uuid>.md).
 """
 
 from __future__ import annotations
 
-import re
-
 import argparse
+import importlib.util
 import json
+import re
 import sys
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
+
+# shared project paths: the transcript-folder slug (one definition with
+# raw-index.py and the pre-compact hook)
+_pa_spec = importlib.util.spec_from_file_location(
+    "_paths", Path(__file__).resolve().parent / "_paths.py")
+_pa = importlib.util.module_from_spec(_pa_spec)
+_pa_spec.loader.exec_module(_pa)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -50,18 +62,37 @@ def project_slug(cwd: str | Path) -> str:
     /Users/you/Dev/my_project.v2 -> -Users-you-Dev-my-project-v2
 
     Every character outside [A-Za-z0-9] becomes "-", not only "/": measured
-    over 72 transcript directories (2026-09-15), `_` and `.` included.
+    over 72 transcript directories (2026-09-15), `_` and `.` included. The
+    rule lives in scripts/_paths.py, shared with raw-index.py and the hook.
     """
-    return re.sub(r"[^A-Za-z0-9]", "-", str(cwd))
+    return _pa.project_slug(cwd)
 
 
 def projects_dir_for(cwd: str | Path) -> Path:
     return PROJECTS_ROOT / project_slug(cwd)
 
 
-def archive_filename(session_id: str, slug: str, first_date: str) -> str:
+def archive_filename(session_id: str, slug: str, first_date: str, n: int = 1) -> str:
+    """The archive's file name; n > 1 numbers a name another session's archive
+    already holds (the short id stays last, where existing_archives reads it)."""
     short = session_id[:8]
-    return f"session-{first_date}-{slug}-{short}.md"
+    count = f"{n}-" if n > 1 else ""
+    return f"session-{first_date}-{slug}-{count}{short}.md"
+
+
+_HEADER_ID = re.compile(r"^\*\*Session ID:\*\* `([^`\n]+)`", re.M)
+
+
+def archive_session_id(path: Path) -> str | None:
+    """The full session id an archive's header names (render_header's
+    **Session ID:** line, within the first 4 KB), or None."""
+    try:
+        with path.open("r", encoding="utf-8", errors="replace") as f:
+            head = f.read(4096)
+    except OSError:
+        return None
+    m = _HEADER_ID.search(head)
+    return m.group(1).strip() if m else None
 
 
 # ---------------------------------------------------------------------------
@@ -258,7 +289,7 @@ def collect_metadata(messages: list[dict[str, Any]]) -> dict[str, Any]:
         "git_branch": git_branch,
         # 2.1.270 transcripts carry no slug field (measured 2026-09-15); name the
         # archive after the project directory instead of "unknown"
-        "slug": slug if slug != "unknown" else (re.sub(r"[^A-Za-z0-9]", "-", Path(cwd).name) if cwd else "unknown"),
+        "slug": slug if slug != "unknown" else (project_slug(Path(cwd).name) if cwd else "unknown"),
         "first_ts": first_ts,
         "last_ts": last_ts,
         "user_count": user_count,
@@ -453,7 +484,23 @@ def export_session(
             meta["slug"],
             date_only(meta["first_ts"]),
         )
-        output_path = archive_dir / fname
+        # ONE archive per session id: a session's name can change between
+        # exports (the transcript's `slug` field appears mid-session, measured
+        # 2026-10-02: one session held two archive names), so an existing
+        # archive for this id is rewritten in place instead of gaining a twin.
+        # Matched on the FULL id in its header: two sessions can share the
+        # short id the name carries, and the other one's archive is kept.
+        sid = meta["session_id"] or jsonl_path.stem
+        output_path = existing_archive_for(archive_dir, sid)
+        if output_path is None:
+            output_path = archive_dir / fname
+            n = 1
+            # the name is taken (another session sharing the short id, the
+            # same day and slug): number it rather than overwrite that archive
+            while output_path.exists() or output_path.is_symlink():
+                n += 1
+                output_path = archive_dir / archive_filename(
+                    meta["session_id"], meta["slug"], date_only(meta["first_ts"]), n)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     header = render_header(meta, jsonl_path, fmt)
@@ -477,18 +524,47 @@ def find_jsonl_for_session(session_id: str, project_dir: Path) -> Path:
     )
 
 
-def existing_archives(project_dir: Path) -> set[str]:
-    """Return the short-uuid prefixes of already-archived sessions.
+def existing_archive_for(archive_dir: Path, session_id: str) -> Path | None:
+    """The archive already written for this session id, or None.
 
-    Returns SHORT IDS uniformly — the caller tests ``session_id[:8]``
-    membership, so returning anything else silently disables dedup (a measured
-    failure mode, 2026-08: an earlier filename-returning version made every
-    sweep re-archive every session). Records live in ``perdure/`` only.
+    Found by the short id the file name ends with (``session-*-<id8>.md``),
+    and taken only when its **Session ID:** header names this FULL id: two
+    sessions can share the first 8 characters, and matching on the name
+    alone rewrote the other session's archive (4.3.0). Regular files only.
+    When an older run left several names for one id, the most recently
+    written is the one rewritten (ties by name, so the choice is stable)."""
+    short = session_id[:8]
+    if len(short) != 8 or not archive_dir.is_dir():
+        return None
+    hits = []
+    for f in archive_dir.glob(f"session-*-{short}.md"):
+        try:
+            if f.is_file() and not f.is_symlink() and archive_session_id(f) == session_id:
+                hits.append((f.stat().st_mtime, f.name, f))
+        except OSError:
+            continue
+    return max(hits)[2] if hits else None
+
+
+def existing_archives(project_dir: Path) -> set[str]:
+    """Return the ids of already-archived sessions: the FULL id each archive's
+    header names, or, for an archive whose header names none (hand-made,
+    truncated), the short id its file name ends with.
+
+    The caller tests the full id, then ``session_id[:8]`` — so a session that
+    shares a short id with an archived one is still archived, while a legacy
+    file without a header keeps deduping as before. Returning file names here
+    silently disabled dedup once (a measured failure mode, 2026-08: every
+    sweep re-archived every session). Records live in ``perdure/`` only.
     """
     archives_dir = project_dir / "perdure" / "archives"
     ids: set[str] = set()
     if archives_dir.exists():
         for f in archives_dir.glob("session-*.md"):
+            full = archive_session_id(f)
+            if full:
+                ids.add(full)
+                continue
             # filename: session-<date>-<slug>-<shortid>.md
             parts = f.stem.rsplit("-", 1)
             if len(parts) == 2 and len(parts[1]) == 8:
@@ -502,11 +578,11 @@ def sweep_project(project_dir: Path, fmt: str, force: bool) -> list[Path]:
     if not jsonl_dir.exists():
         raise FileNotFoundError(f"No project dir found: {jsonl_dir}")
 
-    archived_short_ids = set() if force else existing_archives(project_dir)
+    archived = set() if force else existing_archives(project_dir)
     to_archive = []
     for jsonl in sorted(jsonl_dir.glob("*.jsonl")):
         session_id = jsonl.stem
-        if session_id[:8] in archived_short_ids:
+        if session_id in archived or session_id[:8] in archived:
             continue
         to_archive.append(jsonl)
 

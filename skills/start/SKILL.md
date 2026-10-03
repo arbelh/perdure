@@ -4,9 +4,9 @@ description: Start a new perdure workflow with a persistent state file. Writes
   the plan and the decisions before the first edit, then creates
   perdure/workflows/YYYY-MM-DD-<slug>.md per the records convention and prepares
   the state structure to be updated at each checkpoint. Use at the start of any
-  complex multi-step task that should survive compaction, /clear, or be resumable
-  later — this is the entry point of the golden loop (start → work → review gate
-  → close/archive).
+  task that changes files or decides something, planning and reviews included,
+  so the work survives compaction, /clear, or a new session — this is the entry
+  point of the golden loop (start → work → review gate → close/archive).
 argument-hint: "[slug]"
 ---
 
@@ -28,7 +28,7 @@ by judgment; the main session always has the Agent tool) → **review gate**
 
 ## Arguments
 - `$1` — the workflow slug (lowercase, hyphens). Example: `add-jwt-refresh-tokens`.
-- If absent, derive one from the task in context or ask the user.
+- If absent, derive one from the task in context. Never ask for it.
 
 ## Steps
 
@@ -42,10 +42,11 @@ From the request as it stands, draft three things:
   approaches it rules out, and why.
 - **The first next step** — the resume point a fresh session would start from.
 
-Do this before reading or editing any project file. If you cannot plan yet, the
-first item is the exploration itself and the second is "write the plan from what
-exploration shows". Never leave the scaffold placeholder lines: a placeholder
-plan is a lint finding (`placeholder`) and the closer refuses to close over it.
+Do this before the first edit; for planning or a review, as soon as a decision
+is reached. If you cannot plan yet, the first item is the exploration itself
+and the second is "write the plan from what exploration shows". Never leave the
+scaffold placeholder lines: a placeholder plan is a lint finding
+(`placeholder`) and the closer refuses to close over it.
 
 A record whose plan was never written exists but carries nothing: a session
 resuming from it reads a goal and starts over.
@@ -60,6 +61,9 @@ policy) is `docs/RECORDS-CONVENTION.md` in this plugin, also at
 mkdir -p perdure/workflows
 ```
 
+When the session's folder is the home folder, this is `~/perdure/workflows/`:
+the notes stay in `~/perdure`, and the report says so.
+
 Write `perdure/workflows/<YYYY-MM-DD>-<slug>.md`:
 
 ```markdown
@@ -71,7 +75,7 @@ updated: <ISO 8601>
 ---
 
 # Goal
-<1-3 sentences — ask the user if not clear from context>
+<1-3 sentences, derived from the request in context; never ask>
 
 # Plan
 - [ ] <the plan items from step 1 — never the scaffold placeholder>
@@ -94,8 +98,8 @@ updated: <ISO 8601>
 # Outcome
 ```
 
-If the file already exists, STOP and suggest `/perdure:continue <slug>` or a
-different slug. Never overwrite.
+If the file already exists, never overwrite it: when it is this task's record,
+continue in it (`/perdure:continue <slug>`); otherwise derive a different slug.
 
 These sections are the recommended shape, not a validation gate — real workflow
 files are freeform markdown, and that's fine. Update at checkpoints, not every turn.
@@ -106,24 +110,37 @@ layer, not these.)
 
 ### 3. Report
 
-```
-✅ Workflow started: <date>-<slug>
-Location: perdure/workflows/<date>-<slug>.md
-
-Update it at each checkpoint. Resume anytime: /perdure:continue <slug>
-List workflows: /perdure:list
-```
-
-Then surface the **gate reminder**:
+Say it in one passing line, then go on with the work. Never ask whether to
+keep the record.
 
 ```
-Loop closure: when implementation is complete, run /perdure:verdict <slug>
-before declaring the workflow done. Tests + type-checks are necessary but not
-sufficient; the reviewer catches what they miss. The verdict is appended to
-this file's # Review section — an empty # Review on a completed workflow is a
-gate violation. To skip consciously, record "Review: skipped — <reason>" in
-its place; the skip itself becomes part of the record.
+Record opened: perdure/workflows/<date>-<slug>.md (/perdure:continue <slug> resumes it)
 ```
+
+In the home folder, the line names `~/perdure`:
+
+```
+Record opened in ~/perdure, since this session runs in your home folder: ~/perdure/workflows/<date>-<slug>.md (/perdure:continue <slug> resumes it)
+```
+
+At the project's first record (no other record under `perdure/workflows/`),
+add one line:
+`To see the resume, start a fresh session (or /clear) and run /perdure:continue.`
+
+With someone who does not code, say "note" for record and "where we left off"
+for the resume. At the first note in a folder outside a repository, add, to
+them only: "These notes are plain files in this folder; anyone who can open it
+can read them. Tell me what is confidential and I'll leave it out."
+
+### 4. Before you call the work done
+
+Run `/perdure:verdict <slug>` first. Tests and type-checks are necessary but
+not sufficient; the reviewer catches what they miss. The verdict lands in
+`# Review`, and an empty `# Review` on a completed record is a gate violation.
+To skip consciously, record `Review: skipped — <reason>` in its place; the
+skip becomes part of the record. A plan that is dropped is closed as
+abandoned, with one line on why. The closer's `--abandon "<why>"` also
+records that line as the review skip.
 
 ## Autonomous / zero-turn creation
 

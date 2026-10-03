@@ -12,12 +12,22 @@ Design:
   when the event carries neither (mtime guessing is unreliable when background
   sessions run concurrently), and invokes scripts/export-session.py to write a
   markdown archive.
+- The archive lands in the PROJECT ROOT of the event's `cwd` (4.3.0), not in the
+  hook process's own folder: the nearest folder at or above cwd holding
+  perdure/, never crossing a folder that holds .git; else the repo top; else cwd
+  itself. A session working in a subfolder therefore leaves no stray perdure/
+  there. When that root would be the home folder and home holds no perdure/,
+  nothing is archived and a log line says so. The rule, and the transcript-
+  folder slug the fallback uses, live in scripts/_paths.py, shared with
+  export-session.py and raw-index.py (the hook's own copy of the slug had
+  replaced "/" only, so the fallback missed every path holding "_" or ".").
 - Failures are logged to stderr but the hook always exits 0 — never block /compact.
 - Idempotent with the manual archive skill: the same archive filename scheme is used,
-  and re-invocation just regenerates the file.
+  and re-invocation rewrites the session's existing archive (export-session.py
+  keeps one file per session id).
 
-Stdin: Claude Code passes the hook event JSON; used to identify the session.
-Environment: uses $PWD for project dir; no other env vars required.
+Stdin: Claude Code passes the hook event JSON; used to identify the session and
+its working folder (`cwd`; the hook process's own folder only when absent).
 """
 
 from __future__ import annotations
@@ -52,8 +62,31 @@ def preference_enabled() -> bool:
     return val is True  # strict: no truthy coercion
 
 
+def load_paths():
+    """Import scripts/_paths.py (CLAUDE_PLUGIN_ROOT first, then this file's
+    plugin root) — the ONE definition of the transcript-folder slug and the
+    archive root. None when unlocatable; the caller skips (fail open)."""
+    import importlib.util
+    for base in (os.environ.get("CLAUDE_PLUGIN_ROOT"),
+                 Path(__file__).resolve().parent.parent):
+        if not base:
+            continue
+        cand = Path(base) / "scripts" / "_paths.py"
+        if cand.exists():
+            spec = importlib.util.spec_from_file_location("_paths", cand)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
+    return None
+
+
 def project_slug(cwd: Path) -> str:
-    return str(cwd).replace("/", "-")
+    """Claude Code's transcript-folder name for a working folder: the scripts'
+    rule (every character outside [A-Za-z0-9] becomes "-"), from _paths.py."""
+    pa = load_paths()
+    if pa is None:
+        raise RuntimeError("scripts/_paths.py not found")
+    return pa.project_slug(cwd)
 
 
 def find_current_session_jsonl(cwd: Path) -> Path | None:
@@ -85,17 +118,33 @@ def locate_export_script() -> Path | None:
     return None
 
 
-def session_from_event() -> str | None:
-    """Read the hook event JSON from stdin; return the compacting session's id."""
+def read_event() -> dict:
+    """The hook event JSON from stdin, or {} when absent or unparseable."""
     try:
         if sys.stdin.isatty():
-            return None
+            return {}
         raw = sys.stdin.read()
         if not raw.strip():
-            return None
+            return {}
         event = json.loads(raw)
     except Exception:
-        return None
+        return {}
+    return event if isinstance(event, dict) else {}
+
+
+def event_cwd(event: dict) -> Path:
+    """The session's working folder from the event; this process's own folder
+    only when the event carries no usable absolute one."""
+    cwd = event.get("cwd")
+    if isinstance(cwd, str) and cwd.strip() and os.path.isabs(cwd):
+        p = Path(os.path.normpath(cwd))
+        if p.is_dir():
+            return p
+    return Path.cwd()
+
+
+def session_from_event(event: dict) -> str | None:
+    """Return the compacting session's id from the hook event."""
     sid = event.get("session_id")
     if isinstance(sid, str) and sid.strip():
         return sid.strip()
@@ -105,17 +154,27 @@ def session_from_event() -> str | None:
     return None
 
 
-def main() -> int:
+def _run() -> int:
     # The event JSON on stdin identifies WHICH session is compacting —
     # authoritative when present (mtime guessing misfires with concurrent
     # background sessions).
-    session_id = session_from_event()
+    event = read_event()
+    session_id = session_from_event(event)
 
     if not preference_enabled():
         # Silent no-op — the common case when preference is false/missing
         return 0
 
-    cwd = Path.cwd()
+    pa = load_paths()
+    if pa is None:
+        log("could not locate scripts/_paths.py; skipping")
+        return 0
+    cwd = event_cwd(event)
+    root = pa.archive_root(cwd)
+    if root is None:
+        log(f"the project root for {cwd} would be the home folder, which holds no "
+            "perdure/; not archiving there (open the session in a project folder)")
+        return 0
     if session_id is None:
         jsonl = find_current_session_jsonl(cwd)
         if jsonl is None:
@@ -133,7 +192,7 @@ def main() -> int:
         sys.executable,
         str(script),
         "--session-id", session_id,
-        "--project-dir", str(cwd),
+        "--project-dir", str(root),
         "--format", "medium",
     ]
 
@@ -158,6 +217,16 @@ def main() -> int:
 
     # ALWAYS exit 0 — archival failure must never block /compact
     return 0
+
+
+def main() -> int:
+    # The exit-0 guarantee lives HERE: no input, preference file, module or
+    # export failure may surface as a hook error that blocks /compact.
+    try:
+        return _run()
+    except Exception as e:
+        log(f"unexpected {type(e).__name__}: {e}")
+        return 0
 
 
 if __name__ == "__main__":

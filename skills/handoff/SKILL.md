@@ -22,10 +22,14 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff.py" .
 
 With `--check` as the argument, run integrity-check mode instead — it
 regenerates the page in memory and compares it to the committed one, with or
-without git, so it catches both a stale page and a hand-edited one. Two
-fragments are normalized before comparing and are therefore NOT covered: the
-sha/timestamp stamp, and the advisory `⚠` staleness annotations (whose commit
-counts move on their own). Everything else must match the records exactly:
+without git, so it catches a stale page, a hand-edited one, and one left with
+merge-conflict markers. The stamp names the moment of the newest record update,
+not the commit or the clock, so it is compared like any other line. One
+fragment is normalized before comparing and is therefore NOT covered: the
+advisory `⚠` staleness annotations, whose commit counts move on their own. A
+page in the 4.2.0 format, with its commit-and-minute stamp and old footer,
+still passes when its content is current. Everything else must match the
+records exactly:
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff.py" . --check
@@ -42,7 +46,12 @@ Then:
    never re-quote), then regenerate.
 3. **Show the user the page path** (`perdure/HANDOFF.md`) and, on first
    generation in a repo, a one-line explanation: derived, regenerated, never
-   edited; every status is a claim as of the stamped commit.
+   edited; every status is a claim as of the newest record update the stamp
+   names.
+
+**On a merge conflict in the page**, never resolve it by hand: regenerate it
+from the merged records (the command above) and commit the result. Its second
+line says the same, so any tool that opens the file sees it.
 
 ## Why the lint gate is non-negotiable
 

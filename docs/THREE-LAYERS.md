@@ -50,10 +50,12 @@ current project and appends what it finds. `--verify` re-checks the hashes and
 reports sessions that have gone missing. Labels are sanitised before they are
 written, so a session title cannot inject content into the index.
 
-**Limits.** The sweep is keyed by working directory: work done on one repository
-while the shell sits in another appears in neither. The sweep is manual, and an
-unswept project produces an empty index, which reads the same as a project that
-never had a session. Check both before treating a low count as a finding.
+**Limits.** The sweep reads the sessions started in the project's folder, a
+subfolder of it, or a worktree under it. Work done on one repository from a
+session started in another counts in the other's population, not this one. The
+sweep is manual, and an unswept project produces an empty index, which reads
+the same as a project that never had a session. Check both before treating a
+low count as a finding.
 
 **Across tools.** Records and checks run in every tool the skills reach. This
 layer adds a denominator on top: with it, coverage becomes a number rather than
