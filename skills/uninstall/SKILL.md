@@ -91,6 +91,10 @@ Look for the `<!-- perdure-records:begin -->` …
   (inclusive), save. Leave the file in place, even when nothing but whitespace
   remains, and say so.
 - Show the diff before writing; never touch text outside the markers
+- Either way, when perdure is installed in Codex, add: "In Codex, perdure's
+  session-start hook still gives each session the records rule while the
+  plugin is installed and that hook is trusted. To stop it, leave the hook
+  untrusted in Codex's /hooks, or run `codex plugin remove perdure@perdure`."
 
 ## Step 4: Remove preferences file
 

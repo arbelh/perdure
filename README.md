@@ -28,8 +28,8 @@ claude plugin marketplace add arbelh/perdure
 claude plugin install perdure@perdure
 ```
 
-Then, in a Claude Code session, `/perdure:install` installs the recommended
-setup on enter. From then on the record opens itself.
+Then, in a new Claude Code session, `/perdure:install` installs the recommended
+setup on enter. From the next session on, the record opens itself.
 
 A real record, from the repository perdure was built in, trimmed:
 
@@ -123,7 +123,7 @@ claude plugin marketplace add arbelh/perdure
 claude plugin install perdure@perdure
 ```
 
-Then, in a Claude Code session:
+Then, in a new Claude Code session (an open one needs `/reload-plugins` first):
 
 ```
 /perdure:install
@@ -132,10 +132,10 @@ Then, in a Claude Code session:
 The plugin install adds the `/perdure:*` commands and two hooks: the lint runs
 on its own when a record closes, and sessions can be archived before `/compact`.
 `/perdure:install` is what makes it automatic. It writes the records directive
-into `~/.claude/CLAUDE.md`, so the model opens a record when a task begins and
-closes it when the work is done, without being asked; enter installs the
-recommended setup, "adjust" walks the options. Skip it and you drive with
-`/perdure:start`.
+into `~/.claude/CLAUDE.md`, so from the next session the model opens a record
+when a task begins and closes it when the work is done, without being asked;
+enter installs the recommended setup, "adjust" walks the options. Until then,
+or if you skip it, you drive with `/perdure:start`.
 `/perdure:health` checks the setup. `/perdure:uninstall` removes the directive,
 the `AGENTS.md` marker blocks (the project's, and Codex's `~/.codex/AGENTS.md`)
 and the preferences file; `claude plugin uninstall perdure@perdure` removes the
@@ -155,6 +155,7 @@ fourteen skills into the agent of your choice:
 npx skills add arbelh/perdure                     # all fourteen skills
 npx skills add arbelh/perdure --list              # browse first
 npx skills add arbelh/perdure --skill continue    # just the one you need
+npx skills add arbelh/perdure -g                  # every project, not only this one
 ```
 
 > **Nothing else to clone.** Every skill that runs a check carries `scripts/`
@@ -173,6 +174,9 @@ codex plugin add perdure@perdure
 
 Codex CLI 0.122 or later. The same fourteen skills; Codex keeps the whole
 checkout in its plugin cache, so the checks are in its `scripts/` directory.
+When Codex asks you to review perdure's hooks, trust them: one gives each
+session the records rule, so records open on their own (Codex 0.131 or later).
+To turn that off, leave the hook untrusted in `/hooks` or remove the plugin.
 
 </details>
 
@@ -338,22 +342,16 @@ is in [docs/THREE-LAYERS.md](docs/THREE-LAYERS.md).
 | **Archives** | `/perdure:archive` exports transcripts to markdown under `perdure/archives/`, local by default. |
 | **Decisions** | `/perdure:decide`, `/perdure:decisions`. |
 
-<details>
-<summary><b>Project structure</b></summary>
+**Folder structure** in your project (in the home folder, `~/perdure`):
 
 ```
-.claude-plugin/    plugin.json · marketplace.json   — Claude Code
-.codex-plugin/     plugin.json                      — Codex CLI
-.agents/plugins/   marketplace.json                 — Codex CLI
-skills/            the fourteen skills — what any agent reads
-scripts/           rot-lint · handoff · close-workflow · new-workflow · next-adr-id · coverage · raw-index · export-session
-hooks/             close gate · pre-compact archive
-docs/              RECORDS-CONVENTION.md · THREE-LAYERS.md
-templates/         AGENTS.md — the instructions your project receives
-                   AGENTS.user.md — the same rule for Codex, in ~/.codex/AGENTS.md
+perdure/
+├── workflows/       one record per task
+├── decisions/       decision records and their index
+├── HANDOFF.md       generated from the records
+├── raw/INDEX.jsonl  one line per session that ran
+└── archives/        session transcripts, gitignored
 ```
-
-</details>
 
 ---
 

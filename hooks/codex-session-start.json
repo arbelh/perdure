@@ -1,0 +1,17 @@
+{
+  "description": "perdure hooks for Codex only, listed in .codex-plugin/plugin.json beside hooks/hooks.json; Claude Code does not read this file. SessionStart gives a session that starts, clears or compacts perdure's records rule from templates/AGENTS.user.md, unless an instructions file Codex reads already carries it; a resumed or forked session already has it. Silent otherwise, fail-open.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "^(startup|clear|compact)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/session-start-rule.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

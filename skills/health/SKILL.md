@@ -46,12 +46,21 @@ Codex's folder is `$CODEX_HOME` when that variable is set, else `~/.codex`
   rule of the user's own (a line that names `/perdure:start` or
   `perdure/workflows/`): report it as found outside the markers, with its line
   numbers, not as missing. Both present: say so, since two rules can disagree.
-- When Codex's folder exists: `~/.codex/AGENTS.md` contains the same marker
-  block (Codex reads that file in every project). Missing → `✗` with the fix
-  `/perdure:install`. A records rule of the user's own there is reported as in
-  `~/.claude/CLAUDE.md`. When `AGENTS.override.md` sits in the same folder,
-  say that Codex reads it instead of `AGENTS.md`, so the block is not read
-  while the override exists. No Codex folder: skip this line.
+- When Codex's folder exists, Codex gets the records rule from either of two
+  places: `~/.codex/AGENTS.md` carrying the same marker block (Codex reads that
+  file in every project), or perdure's session-start hook (4.4.0 and later)
+  once the user has trusted it: a `[hooks.state]` entry naming
+  `codex-session-start.json` in Codex's `config.toml` that has a
+  `trusted_hash` and does not say `enabled = false`. Either → `✓`, naming
+  which; the hook stays silent where the file carries the rule. For the hook,
+  add that the hash is not compared with the current hook, so a hook changed
+  since it was trusted still reads `✓` here while Codex asks to review it
+  again. Neither → `✗` with the fixes: trust the hook in Codex's `/hooks`, or
+  `/perdure:install`.
+  A records rule of the user's own there is reported as in
+  `~/.claude/CLAUDE.md`. When a non-empty `AGENTS.override.md` sits in the same
+  folder, say that Codex reads it instead of `AGENTS.md`, so the block is not
+  read while the override exists. No Codex folder: skip this line.
 - `~/.claude/perdure-preferences.json` exists. Show:
   - the active values. A key the file lacks takes the value the code reads
     while it is missing; say which keys, and that value:
